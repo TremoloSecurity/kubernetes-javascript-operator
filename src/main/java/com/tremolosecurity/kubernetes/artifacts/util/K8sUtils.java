@@ -42,6 +42,7 @@ import java.util.UUID;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
+import javax.script.Invocable;
 import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 
@@ -174,6 +175,38 @@ public class K8sUtils {
 
     public Map callWS(String uri) throws Exception {
         return callWS(uri,null,10);
+    }
+
+    public void watchURI(String uri) throws Exception {
+
+        StringBuffer b = new StringBuffer();
+		
+		b.append(this.url).append(uri);
+		HttpGet get = new HttpGet(b.toString());
+		b.setLength(0);
+		b.append("Bearer ").append(token);
+        get.addHeader(new BasicHeader("Authorization","Bearer " + token));
+        
+        HttpCon con = this.createClient();
+
+        try {
+            HttpResponse resp = con.getHttp().execute(get);
+
+            BufferedReader in = new BufferedReader(new InputStreamReader(resp.getEntity().getContent()));
+
+            String line = null;
+            while ((line = in.readLine()) != null) {
+                Invocable invocable = (Invocable) engine;
+                invocable.invokeFunction("on_modify", line);
+
+            }
+
+        } finally {
+            if (con != null) {
+				con.getBcm().shutdown();
+			}
+        }
+
     }
 
     public Map callWS(String uri,String testFunction,int count) throws Exception {

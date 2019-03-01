@@ -44,14 +44,11 @@
 		<repository>
 			<id>nexus.tremolo.io</id>
 			<name>tremolo.io-releases</name>
-			<url>https://nexus.tremolo.io/repository/betas/</url>
+			<url>https://nexus.tremolo.io/repository/releases/</url>
 		</repository>
 
 
-		<!-- <repository>
-			<id>jboss</id>
-			<url>https://repository.jboss.org/nexus/content/repositories/</url>
-		</repository>  -->
+
 
 
 
@@ -144,6 +141,12 @@
 			<artifactId>commons-io</artifactId>
 			<version>${commonsio.version}</version>
 		</dependency>
+		<dependency>
+            <groupId>com.googlecode.json-simple</groupId>
+            <artifactId>json-simple</artifactId>
+            <version>1.1.1</version>
+        </dependency>
+
 	</dependencies>
 	<build>
 		<plugins>
@@ -163,7 +166,7 @@
 						<transformer
 							implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
 						<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>com.tremolosecurity.kubernetes.artifacts.run.RunDeployment</mainClass>
+                  <mainClass>com.tremolosecurity.kubernetes.artifacts.run.Controller</mainClass>
                 </transformer>
 					</transformers>
 					<createDependencyReducedPom>false</createDependencyReducedPom>
