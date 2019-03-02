@@ -71,7 +71,7 @@ public class Controller {
         options.addOption("apiGroup", true, "version and group");
         options.addOption("namespace", true, "namespace");
         options.addOption("objectType", true, "CRD type");
-        options.addOption("objectName", true, "CRD");
+        
         options.addOption("help", false, "Prints this message");
 
         CommandLineParser parser = new DefaultParser();
@@ -92,7 +92,7 @@ public class Controller {
             String apiGroup = loadOption(cmd, "apiGroup", options);
             String namespace = loadOption(cmd, "namespace", options);
             String objectType = loadOption(cmd, "objectType", options);
-            String objectName = loadOption(cmd, "objectName", options);
+            
 
             K8sUtils k8s = new K8sUtils(tokenPath, rootCaPath, configMaps, kubernetesURL);
 
@@ -113,7 +113,7 @@ public class Controller {
 
             k8s.setEngine(engine);
             while (stillWatching) {
-                runWatch(apiGroup, namespace, objectType, objectName, k8s);
+                runWatch(apiGroup, namespace, objectType, k8s);
             }
             // URL scriptURL = new URL(installScriptURL);
             // engine.eval(new BufferedReader(new
@@ -121,20 +121,20 @@ public class Controller {
         }
     }
 
-    private static void runWatch(String apiGroup, String namespace, String objectType, String objectName, K8sUtils k8s)
+    private static void runWatch(String apiGroup, String namespace, String objectType, K8sUtils k8s)
             throws Exception, ParseException {
         String uri = "/apis/" + apiGroup + "/namespaces/" + namespace + "/" + objectType;
 
-        Map res = k8s.callWS(uri + "/" + objectName);
+        Map res = k8s.callWS(uri);
         String jsonObj = (String) res.get("data");
         
         JSONObject root = (JSONObject) new JSONParser().parse(jsonObj);
         String resourceVersion = (String) ((JSONObject) root.get("metadata")).get("resourceVersion");
         System.out.println(resourceVersion);
 
-        uri = uri + "?watch=true&resourceVersion=" + resourceVersion + "&fieldSelector=metadata.name=" + objectName;
-
-        k8s.watchURI(uri);
+        //uri = uri + "?watch=true&resourceVersion=" + resourceVersion + "&fieldSelector=metadata.name=" + objectName;
+        uri = uri + "?watch=true&resourceVersion=" + resourceVersion;
+        k8s.watchURI(uri,"on_watch");
     }
 
     static String loadOption(CommandLine cmd,String name,Options options) {

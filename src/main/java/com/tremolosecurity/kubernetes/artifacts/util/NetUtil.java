@@ -32,6 +32,12 @@ import java.util.stream.Collectors;
  */
 public class NetUtil {
 
+    /**
+     * Downloads a file from the given URL
+     * @param url
+     * @return
+     * @throws IOException
+     */
     public static String downloadFile(String url) throws IOException {
         URL urlObj = new URL(url);
         URLConnection conn = urlObj.openConnection();
@@ -41,6 +47,11 @@ public class NetUtil {
         }
     }
 
+    /**
+     * Determine your IP address
+     * @return
+     * @throws SocketException
+     */
     public static String whatsMyIP() throws SocketException {
         Enumeration<NetworkInterface> enumer = NetworkInterface.getNetworkInterfaces();
         while (enumer.hasMoreElements()) {

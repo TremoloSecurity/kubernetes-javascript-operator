@@ -19,16 +19,26 @@ import java.security.cert.X509Certificate;
 
 /**
  * X509Data
+ * Storage for both the certificate data and the keypair
  */
 public class X509Data {
     X509Certificate certificate;
     KeyPair keyData;
     private CertificateData certInput;
 
+    /**
+     * Default constructor
+     */
     public X509Data() {
 
     }
 
+    /**
+     * Create with key material
+     * @param kp
+     * @param cert
+     * @param certInput
+     */
     public X509Data(KeyPair kp,X509Certificate cert,CertificateData certInput) {
         this.keyData = kp;
         this.certificate = cert;

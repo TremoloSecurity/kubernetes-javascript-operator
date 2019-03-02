@@ -29,10 +29,21 @@ import java.util.List;
 
 /**
  * DbUtils
+ * Utilities for interacting with SQL databases
  */
 public class DbUtils {
 
 
+    /**
+     * Run a list of sql statements againt a database
+     * @param sqls
+     * @param driver
+     * @param url
+     * @param userName
+     * @param password
+     * @throws ClassNotFoundException
+     * @throws SQLException
+     */
     public static void runSQL(List<String> sqls, String driver, String url, String userName, String password)
             throws ClassNotFoundException, SQLException {
         Class.forName(driver);
@@ -47,6 +58,12 @@ public class DbUtils {
         con.close();
     }
 
+    /**
+     * Parse a list of SQL statements from the source of a file
+     * @param source
+     * @return
+     * @throws IOException
+     */
     public static List<String> parseSQL(String source) throws IOException {
         ArrayList<String> sqlStatements = new ArrayList<String>();
 

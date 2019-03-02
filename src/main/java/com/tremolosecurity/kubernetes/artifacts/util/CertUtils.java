@@ -66,6 +66,9 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.pkcs.PKCS10CertificationRequestBuilder;
 import org.bouncycastle.x509.X509V3CertificateGenerator;
 
+/**
+ * Static utility class meant for being called from within javascript
+ */
 public class CertUtils {
     static SecureRandom secRandom = new SecureRandom();
 
@@ -81,12 +84,24 @@ public class CertUtils {
 		ks.setKeyEntry(alias, sk, ksPassword.toCharArray(), null);
     }
     
+    /**
+     * Create an X509Data object from a JSON version from JavaScript
+     * @param fromjs
+     * @return
+     * @throws Exception
+     */
     public static X509Data createCertificate(Map fromjs) throws Exception {
         CertificateData data = new ObjectMapper().convertValue(fromjs, CertificateData.class);
 
         return createCertificate(data);
     }
 
+    /**
+     * Create a certificate and keypair based on a certificate data object
+     * @param certData
+     * @return
+     * @throws Exception
+     */
     public static X509Data createCertificate(CertificateData certData) throws Exception {
 		String keyAlg = "RSA";
 		
@@ -139,6 +154,17 @@ public class CertUtils {
 
     }
     
+    /**
+     * Generate a CSR based on X509
+     * @param x509
+     * @return
+     * @throws InvalidKeyException
+     * @throws NoSuchAlgorithmException
+     * @throws NoSuchProviderException
+     * @throws SignatureException
+     * @throws IOException
+     * @throws OperatorCreationException
+     */
     public static String generateCSR(X509Data x509) throws InvalidKeyException, NoSuchAlgorithmException, NoSuchProviderException, SignatureException, IOException, OperatorCreationException {
         PKCS10CertificationRequestBuilder kpGen = new PKCS10CertificationRequestBuilder( new org.bouncycastle.asn1.x500.X500Name(x509.getCertificate().getSubjectX500Principal().getName()), SubjectPublicKeyInfo.getInstance(x509.getKeyData().getPublic().getEncoded()));
 
@@ -167,6 +193,12 @@ public class CertUtils {
     }
 
 
+    /**
+     * Parse a PEM file into a certificate
+     * @param b64Cert
+     * @return
+     * @throws Exception
+     */
     public static X509Certificate string2cert(String b64Cert) throws Exception {
         //System.out.println(b64Cert);
         //System.out.println("");
@@ -178,6 +210,12 @@ public class CertUtils {
         return (X509Certificate) c.iterator().next();
     }
 
+    /**
+     * Generate a PEM from a certificate
+     * @param cert
+     * @return
+     * @throws Exception
+     */
     public static String exportCert(X509Certificate cert) throws Exception {
 		
 		Base64 encoder = new Base64(64);
@@ -193,6 +231,12 @@ public class CertUtils {
 		return b64;
     }
     
+    /**
+     * Expot and base64 encode a private key
+     * @param pk
+     * @return
+     * @throws Exception
+     */
     public static String exportKey(PrivateKey pk) throws Exception {
         Base64 encoder = new Base64(64);
 		
@@ -207,6 +251,14 @@ public class CertUtils {
 		return b64;
     }
 
+    /**
+     * Import a signed certificate into the keystore for an existing keypair
+     * @param x509
+     * @param b64cert
+     * @throws CertificateException
+     * @throws UnsupportedEncodingException
+     * @throws KeyStoreException
+     */
     public static void importSignedCert(X509Data x509,String b64cert) throws CertificateException, UnsupportedEncodingException, KeyStoreException {
         String pemCert = new String(java.util.Base64.getDecoder().decode(b64cert));
         ByteArrayInputStream bais = new ByteArrayInputStream(pemCert.getBytes("UTF-8"));
@@ -215,6 +267,16 @@ public class CertUtils {
         x509.setCertificate((X509Certificate) c.iterator().next());
     }
 
+    /**
+     * Import a PEM encoded certificate into the keystore
+     * @param ks
+     * @param ksPass
+     * @param alias
+     * @param pemCert
+     * @throws CertificateException
+     * @throws UnsupportedEncodingException
+     * @throws KeyStoreException
+     */
     public static void importCertificate(KeyStore ks,String ksPass,String alias,String pemCert) throws CertificateException, UnsupportedEncodingException, KeyStoreException {
         ByteArrayInputStream bais = new ByteArrayInputStream(pemCert.getBytes("UTF-8"));
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
@@ -233,6 +295,16 @@ public class CertUtils {
 
     }
 
+    /**
+     * Import a certificate into the keystore
+     * @param ks
+     * @param ksPass
+     * @param alias
+     * @param cert
+     * @throws CertificateException
+     * @throws UnsupportedEncodingException
+     * @throws KeyStoreException
+     */
     public static void importCertificate(KeyStore ks,String ksPass,String alias,X509Certificate cert) throws CertificateException, UnsupportedEncodingException, KeyStoreException {
         
             ks.setCertificateEntry(alias, cert);
@@ -240,11 +312,29 @@ public class CertUtils {
 
     }
 
+    /**
+     * Save full X509 data key into the keystore
+     * @param ks
+     * @param ksPass
+     * @param alias
+     * @param x509
+     * @throws KeyStoreException
+     */
     public static void saveX509ToKeystore(KeyStore ks,String ksPass,String alias,X509Data x509)
             throws KeyStoreException {
         ks.setKeyEntry(alias, x509.getKeyData().getPrivate(),ksPass.toCharArray(), new Certificate[]{x509.getCertificate()});
     }
 
+    /**
+     * Base64 Encode the keystore
+     * @param ks
+     * @param ksPassword
+     * @return
+     * @throws KeyStoreException
+     * @throws NoSuchAlgorithmException
+     * @throws CertificateException
+     * @throws IOException
+     */
     public static String encodeKeyStore(KeyStore ks,String ksPassword)
             throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();

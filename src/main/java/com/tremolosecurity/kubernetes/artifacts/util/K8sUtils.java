@@ -73,6 +73,8 @@ import org.apache.http.util.EntityUtils;
 
 /**
  * K8sUtils
+ * 
+ * Utilities for interacting with the Kubernetes API server
  */
 public class K8sUtils {
     String token;
@@ -86,6 +88,19 @@ public class K8sUtils {
 
     ScriptEngine engine;
 
+    /**
+     * Initialization
+     * @param pathToToken
+     * @param pathToCA
+     * @param pathToMoreCerts
+     * @param apiServerURL
+     * @throws IOException
+     * @throws KeyStoreException
+     * @throws NoSuchAlgorithmException
+     * @throws CertificateException
+     * @throws UnrecoverableKeyException
+     * @throws KeyManagementException
+     */
     public K8sUtils(String pathToToken,String pathToCA,String pathToMoreCerts,String apiServerURL) throws IOException, KeyStoreException, NoSuchAlgorithmException, CertificateException, UnrecoverableKeyException, KeyManagementException {
         //get the token for talking to k8s
         this.token = new String(Files.readAllBytes(Paths.get(pathToToken)), StandardCharsets.UTF_8);
@@ -148,6 +163,11 @@ public class K8sUtils {
 
     }
 
+    /**
+     * Generate an HTTP client pre-configured with the container's service-account token and trust of the api server's certificate
+     * @return
+     * @throws Exception
+     */
     public HttpCon createClient() throws Exception {
 		ArrayList<Header> defheaders = new ArrayList<Header>();
 		defheaders.add(new BasicHeader("X-Csrf-Token", "1"));
@@ -173,11 +193,22 @@ public class K8sUtils {
 	}
 
 
+    /**
+     * Call a kubernetes web service via GET
+     * @param uri
+     * @return
+     * @throws Exception
+     */
     public Map callWS(String uri) throws Exception {
         return callWS(uri,null,10);
     }
 
-    public void watchURI(String uri) throws Exception {
+    /**
+     * Watch a Kubernetes object based on its URI
+     * @param uri
+     * @throws Exception
+     */
+    public void watchURI(String uri,String functionName) throws Exception {
 
         StringBuffer b = new StringBuffer();
 		
@@ -197,7 +228,7 @@ public class K8sUtils {
             String line = null;
             while ((line = in.readLine()) != null) {
                 Invocable invocable = (Invocable) engine;
-                invocable.invokeFunction("on_modify", line);
+                invocable.invokeFunction(functionName, line);
 
             }
 
@@ -209,6 +240,14 @@ public class K8sUtils {
 
     }
 
+    /**
+     * GET an API via its URI, with a test function for success and a number of attempted retries
+     * @param uri
+     * @param testFunction
+     * @param count
+     * @return
+     * @throws Exception
+     */
     public Map callWS(String uri,String testFunction,int count) throws Exception {
         
         StringBuffer b = new StringBuffer();
@@ -280,6 +319,12 @@ public class K8sUtils {
         }
     }
 
+    /**
+     * DELETE a Kubernetes object
+     * @param uri
+     * @return
+     * @throws Exception
+     */
     public Map deleteWS(String uri) throws Exception {
         
         StringBuffer b = new StringBuffer();
@@ -311,6 +356,13 @@ public class K8sUtils {
         }
     }
     
+    /**
+     * POST to an API URI
+     * @param uri
+     * @param json
+     * @return
+     * @throws Exception
+     */
     public Map postWS(String uri,String json) throws Exception {
         StringBuffer b = new StringBuffer();
 		
@@ -344,6 +396,13 @@ public class K8sUtils {
         }
     }
 
+    /**
+     * PUT to a URI
+     * @param uri
+     * @param json
+     * @return
+     * @throws Exception
+     */
     public Map putWS(String uri,String json) throws Exception {
         StringBuffer b = new StringBuffer();
 		
@@ -379,10 +438,22 @@ public class K8sUtils {
     }
 
 
+    /**
+     * Returns a certificate from the internal keystore
+     * @param name
+     * @return
+     * @throws KeyStoreException
+     */
     public X509Certificate getCertificate(String name) throws KeyStoreException {
         return (X509Certificate) this.ks.getCertificate(name);
     }
 
+    /**
+     * Base64 encode a Map of name/value pairs
+     * @param data
+     * @return
+     * @throws UnsupportedEncodingException
+     */
     public String encodeMap(Map data) throws UnsupportedEncodingException {
         String vals = "";
         for (Object k : data.keySet()) {
@@ -392,6 +463,12 @@ public class K8sUtils {
         return Base64.getEncoder().encodeToString(vals.getBytes("UTF-8"));
     }
 
+    /**
+     * Simple template processor replacing name/value pairs from the map to anything enclused in #[] so #[MY_VALUE] would be replaced with the value from the map associated with the key MY_VALUE
+     * @param template
+     * @param vars
+     * @return
+     */
     public String processTemplate(String template,Map vars) {
         StringBuffer newConfig = new StringBuffer();
         newConfig.setLength(0);
@@ -436,6 +513,12 @@ public class K8sUtils {
         return newConfig.toString();
     }
 
+    /**
+     * Run kubectl create with the data passed in using the service account of the container
+     * @param data
+     * @throws IOException
+     * @throws InterruptedException
+     */
     public void kubectlCreate(String data) throws IOException, InterruptedException {
         Process p = Runtime.getRuntime().exec(new String[]{"kubectl","--token=" + this.token ,"--server=" + this.url ,"--certificate-authority=" + this.pathToCaCert ,"create","-f","-"});
 

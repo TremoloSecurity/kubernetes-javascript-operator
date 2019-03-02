@@ -9,7 +9,7 @@ Framework for Building Operators in Javascript
 * Image is built on a Java base, providing access to both JavaScript functions and Java's built in capabilities
 * Provide low level access to the api server with some error handling
 * Watch single object on startup, let additional watches be registered in code
-* Compatability With Red Hat Operator Lifecycle Manager
+* Compatibility With Red Hat Operator Lifecycle Manager
 
 ## Why JavaScript?
 
@@ -25,3 +25,11 @@ Framework for Building Operators in Javascript
 * Flexible
 
 ## How To...
+
+## Toolbox
+
+From inside of your JavaScript there are multiple objects meant to make it easier to interact with the api server.  See the `docs` folder for a detailed description of the objects definitions.
+
+### k8s
+
+The `k8s` object maintains a "connection" to the api server.  Internally it trusts the api server's certificate and is pre-configured to work with the api token for the service account of the container.  
