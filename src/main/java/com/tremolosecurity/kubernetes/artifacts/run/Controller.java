@@ -102,6 +102,8 @@ public class Controller {
             ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
             
             engine.getBindings(ScriptContext.ENGINE_SCOPE).put("k8s", k8s);
+            engine.getBindings(ScriptContext.ENGINE_SCOPE).put("k8s_namespace",namespace);
+            engine.getBindings(ScriptContext.ENGINE_SCOPE).put("js",engine);
             
             File[] scripts = new File(jsPath).listFiles();
             for (File script : scripts) {

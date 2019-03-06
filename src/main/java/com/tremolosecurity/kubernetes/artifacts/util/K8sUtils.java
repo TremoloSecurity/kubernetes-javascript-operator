@@ -266,7 +266,7 @@ public class K8sUtils {
             ret.put("code",resp.getStatusLine().getStatusCode());
             ret.put("data",json);
 
-            if (resp.getStatusLine().getStatusCode() < 200 || resp.getStatusLine().getStatusCode() > 299) {
+            if (count >= 0 && (resp.getStatusLine().getStatusCode() < 200 || resp.getStatusLine().getStatusCode() > 299)) {
                 System.err.println("Problem calling '" + uri + "' - " + resp.getStatusLine().getStatusCode());
                 System.err.println(json);
 
