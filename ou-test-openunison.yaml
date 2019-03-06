@@ -1,0 +1,148 @@
+apiVersion: openunison.tremolo.io/v1
+kind: OpenUnison
+metadata:
+  creationTimestamp: "2019-03-06T16:05:49Z"
+  generation: 1
+  name: test-openunison
+  namespace: openunison-operator
+  resourceVersion: "12081148"
+  selfLink: /apis/openunison.tremolo.io/v1/namespaces/openunison-operator/openunisons/test-openunison
+  uid: b5b6c45b-4029-11e9-8fac-525400858745
+spec:
+  activemq_image: docker.io/tremolosecurity/activemq-docker:latest
+  dest_secret: openunison
+  enable_activemq: false
+  image: docker.io/tremolosecurity/openunison-k8s-login-oidc:latest
+  key_store:
+    key_pairs:
+      create_keypair_template:
+      - name: ou
+        value: k8s
+      - name: o
+        value: Tremolo Security
+      - name: l
+        value: Alexandria
+      - name: st
+        value: Virginia
+      - name: c
+        value: US
+      keys:
+      - create_data:
+          ca_cert: false
+          key_size: 2048
+          server_name: ${k8s_obj.metadata.name + '.' + k8s_namespace + '.svc.cluster.local'}
+          sign_by_k8s_ca: true
+          subject_alternative_names: []
+        import_into_ks: keypair
+        name: unison-tls
+        tls_secret_name: unison-tls-secret
+      - create_data:
+          ca_cert: false
+          key_size: 2048
+          server_name: unison-saml2-rp-sig
+          sign_by_k8s_ca: false
+          subject_alternative_names: []
+        import_into_ks: keypair
+        name: unison-saml2-rp-sig
+        tls_secret_name: unison-saml2-rp-sig
+      - create_data:
+          ca_cert: false
+          key_size: 2048
+          server_name: ${inProp['OU_HOST']}
+          sign_by_k8s_ca: false
+          subject_alternative_names:
+          - ${inProp['K8S_DASHBOARD_HOST']}
+        import_into_ks: none
+        name: ou-tls-certificate
+      - create_data:
+          ca_cert: false
+          key_size: 2048
+          secret_info:
+            cert_nanme: db.crt
+            key_name: db.key
+            type_of_secret: Opaque
+          server_name: kubernetes-dashboard.kube-system.svc.cluster.local
+          sign_by_k8s_ca: true
+          subject_alternative_names: []
+          target_namespace: kube-system
+        import_into_ks: none
+        name: kubernetes-dashboard.kube-system.svc.cluster.local
+        replace_if_exists: true
+    static_keys:
+    - name: session-unison
+      version: 2
+    - name: lastmile-oidc
+      version: 1
+    trusted_certificates:
+    - name: trusted-adldaps
+      pem_data: |-
+        -----BEGIN CERTIFICATE-----
+        MIIDNDCCAhygAwIBAgIQbRNj6RKqtqVPvW65qZxXXjANBgkqhkiG9w0BAQUFADAi
+        MSAwHgYDVQQDDBdBREZTLkVOVDJLMTIuRE9NQUlOLkNPTTAeFw0xNDAzMjgwMTA1
+        MzNaFw0yNDAzMjUwMTA1MzNaMCIxIDAeBgNVBAMMF0FERlMuRU5UMksxMi5ET01B
+        SU4uQ09NMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2s9JkeNAHOkQ
+        1QYJgjefUwcaogEMcaW/koA+bu9xbr4rHy/2gN/kc8OkoPuwJ/nNlOIO+s+MbnXS
+        L9mUTC4OK7trkEjiKXB+D+VSYy6imXh6zpBtNbeZyx+rdBnaOv3ByZRnnEB8LmhM
+        vHA+4f/t9fx/2vt6wPx//VgIq9yuYYUQRLm1WjyUBFrZeGoSpPm0Kewm+B0bhmMb
+        dyC+3fhaKC+Uk1NPodE2973jLBZJelZxsZY40Ww8zYQwdGYIbXqoTc+1a/x4f1En
+        m4ANqggHtw+Nq8zhss3yTtY+UYKDRBILdLVZQhHJExe0kAeisgMxI/bBwO1HbrFV
+        +zSnk+nvgQIDAQABo2YwZDAzBgNVHSUELDAqBggrBgEFBQcDAQYIKwYBBQUHAwIG
+        CisGAQQBgjcUAgIGCCsGAQUFBwMDMB0GA1UdDgQWBBTyJUfY66zYbm9i0xeYHuFI
+        4MN7uDAOBgNVHQ8BAf8EBAMCBSAwDQYJKoZIhvcNAQEFBQADggEBAM5kz9OKNSuX
+        8w4NOgnfIFdazd0nPlIUbvDVfQoNy9Q0S1SFUVMekIPNiVhfGzya9IwRtGb1VaBQ
+        AQ2ORIzHr8A2r5UNLx3mFjpJmeOxQwlV0X+g8s+253KVFxOpRE6yyagn/BxxptTL
+        a1Z4qeQJLD42ld1qGlRwFtVRmVFZzVXVrpu7NuFd3vlnnO/qKWXU+uMsfXtsl13n
+        ec1kw1Ewq2jnK8WImKTQ7/9WbaIY0gx8mowCJSOsRq0TE7zK/N55drN1wXJVxWe5
+        4N32eCqotXy9j9lzdkNa7awb9q38nWVxP+va5jqNIDlljB6tExy5n3s7t6KK6g5j
+        TZgVqrZ3+ms=
+        -----END CERTIFICATE-----
+  non_secret_data:
+  - name: AD_BASE_DN
+    value: cn=users,dc=ent2k12,dc=domain,dc=com
+  - name: AD_BIND_DN
+    value: cn=Administrator,cn=users,dc=ent2k12,dc=domain,dc=com
+  - name: AD_CON_TYPE
+    value: ldaps
+  - name: AD_HOST
+    value: 192.168.2.75
+  - name: AD_PORT
+    value: "636"
+  - name: K8S_DASHBOARD_HOST
+    value: k8sdb.tremolo.lan
+  - name: K8S_URL
+    value: https://k8s-installer-master.tremolo.lan:6443
+  - name: OU_COOKIE_DOMAIN
+    value: tremolo.lan
+  - name: OU_HOST
+    value: k8sou.tremolo.lan
+  - name: SRV_DNS
+    value: "false"
+  - name: SESSION_INACTIVITY_TIMEOUT_SECONDS
+    value: "900"
+  - name: MYVD_CONFIG_PATH
+    value: WEB-INF/myvd.conf
+  openunison_network_configuration:
+    activemq_dir: /tmp/amq
+    allowed_client_names: []
+    ciphers:
+    - TLS_RSA_WITH_RC4_128_SHA
+    - TLS_RSA_WITH_AES_128_CBC_SHA
+    - TLS_RSA_WITH_AES_256_CBC_SHA
+    - TLS_RSA_WITH_3DES_EDE_CBC_SHA
+    - TLS_RSA_WITH_AES_128_CBC_SHA256
+    - TLS_RSA_WITH_AES_256_CBC_SHA256
+    client_auth: none
+    force_to_secure: true
+    open_external_port: 80
+    open_port: 8080
+    path_to_deployment: /usr/local/openunison/work
+    path_to_env_file: /etc/openunison/ou.env
+    quartz_dir: /tmp/quartz
+    secure_external_port: 443
+    secure_key_alias: unison-tls
+    secure_port: 8443
+  replicas: 2
+  secret_data:
+  - unisonKeyStorePassword
+  - AD_BIND_PASSWORD
+  source_secret: openunison-secrets-source
