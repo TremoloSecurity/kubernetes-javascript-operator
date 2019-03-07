@@ -46,6 +46,10 @@ import javax.script.Invocable;
 import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import com.tremolosecurity.kubernetes.artifacts.obj.HttpCon;
 import com.tremolosecurity.kubernetes.artifacts.run.Controller;
 
@@ -54,8 +58,10 @@ import org.apache.http.HttpResponse;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.entity.EntityBuilder;
 import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPatch;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.config.Registry;
@@ -71,6 +77,7 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.BasicHttpClientConnectionManager;
 import org.apache.http.message.BasicHeader;
 import org.apache.http.util.EntityUtils;
+import org.json.simple.JSONObject;
 
 /**
  * K8sUtils
@@ -82,7 +89,7 @@ public class K8sUtils {
     private KeyStore ks;
     private String ksPassword;
     private KeyManagerFactory kmf;
-	private Registry<ConnectionSocketFactory> httpClientRegistry;
+    private Registry<ConnectionSocketFactory> httpClientRegistry;
     private RequestConfig globalHttpClientConfig;
     String url;
     String pathToCaCert;
@@ -91,6 +98,7 @@ public class K8sUtils {
 
     /**
      * Initialization
+     * 
      * @param pathToToken
      * @param pathToCA
      * @param pathToMoreCerts
@@ -102,8 +110,10 @@ public class K8sUtils {
      * @throws UnrecoverableKeyException
      * @throws KeyManagementException
      */
-    public K8sUtils(String pathToToken,String pathToCA,String pathToMoreCerts,String apiServerURL) throws IOException, KeyStoreException, NoSuchAlgorithmException, CertificateException, UnrecoverableKeyException, KeyManagementException {
-        //get the token for talking to k8s
+    public K8sUtils(String pathToToken, String pathToCA, String pathToMoreCerts, String apiServerURL)
+            throws IOException, KeyStoreException, NoSuchAlgorithmException, CertificateException,
+            UnrecoverableKeyException, KeyManagementException {
+        // get the token for talking to k8s
         this.token = new String(Files.readAllBytes(Paths.get(pathToToken)), StandardCharsets.UTF_8);
 
         this.pathToCaCert = pathToCA;
@@ -111,7 +121,6 @@ public class K8sUtils {
         this.ksPassword = UUID.randomUUID().toString();
         this.ks = KeyStore.getInstance("PKCS12");
         this.ks.load(null, this.ksPassword.toCharArray());
-
 
         String caCert = new String(Files.readAllBytes(Paths.get(pathToCA)), StandardCharsets.UTF_8);
 
@@ -121,12 +130,13 @@ public class K8sUtils {
         if (moreCerts.exists() && moreCerts.isDirectory()) {
             for (File certFile : moreCerts.listFiles()) {
                 System.out.println("Processing - '" + certFile.getAbsolutePath() + "'");
-                if (certFile.isDirectory() || ! certFile.getAbsolutePath().toLowerCase().endsWith(".pem")) {
+                if (certFile.isDirectory() || !certFile.getAbsolutePath().toLowerCase().endsWith(".pem")) {
                     System.out.println("not a pem, sipping");
                     continue;
                 }
-                String certPem = new String(Files.readAllBytes(Paths.get(certFile.getAbsolutePath())), StandardCharsets.UTF_8);
-                String alias = certFile.getName().substring(0,certFile.getName().indexOf('.'));
+                String certPem = new String(Files.readAllBytes(Paths.get(certFile.getAbsolutePath())),
+                        StandardCharsets.UTF_8);
+                String alias = certFile.getName().substring(0, certFile.getName().indexOf('.'));
                 CertUtils.importCertificate(ks, ksPassword, alias, certPem);
             }
         }
@@ -136,92 +146,93 @@ public class K8sUtils {
         if (cacertsPath == null) {
             cacertsPath = System.getProperty("java.home") + "/lib/security/cacerts";
         }
-        
+
         cacerts.load(new FileInputStream(cacertsPath), null);
-        
+
         Enumeration<String> enumer = cacerts.aliases();
         while (enumer.hasMoreElements()) {
             String alias = enumer.nextElement();
             java.security.cert.Certificate cert = cacerts.getCertificate(alias);
             ks.setCertificateEntry(alias, cert);
         }
-        
+
         this.kmf = KeyManagerFactory.getInstance("SunX509");
         kmf.init(this.ks, this.ksPassword.toCharArray());
 
-        SSLContext sslctx = SSLContexts.custom().loadTrustMaterial(this.ks).loadKeyMaterial(this.ks,this.ksPassword.toCharArray()).build();
-		SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(sslctx,SSLConnectionSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER);
-		
-		PlainConnectionSocketFactory sf = PlainConnectionSocketFactory.getSocketFactory();
-		this.httpClientRegistry = RegistryBuilder.<ConnectionSocketFactory>create()
-		        .register("http", sf)
-		        .register("https", sslsf)
-		        .build();
-		
-		this.globalHttpClientConfig = RequestConfig.custom().setCookieSpec(CookieSpecs.IGNORE_COOKIES).setRedirectsEnabled(false).setAuthenticationEnabled(false).build();
+        SSLContext sslctx = SSLContexts.custom().loadTrustMaterial(this.ks)
+                .loadKeyMaterial(this.ks, this.ksPassword.toCharArray()).build();
+        SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(sslctx,
+                SSLConnectionSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER);
+
+        PlainConnectionSocketFactory sf = PlainConnectionSocketFactory.getSocketFactory();
+        this.httpClientRegistry = RegistryBuilder.<ConnectionSocketFactory>create().register("http", sf)
+                .register("https", sslsf).build();
+
+        this.globalHttpClientConfig = RequestConfig.custom().setCookieSpec(CookieSpecs.IGNORE_COOKIES)
+                .setRedirectsEnabled(false).setAuthenticationEnabled(false).build();
 
         this.url = apiServerURL;
 
     }
 
     /**
-     * Generate an HTTP client pre-configured with the container's service-account token and trust of the api server's certificate
+     * Generate an HTTP client pre-configured with the container's service-account
+     * token and trust of the api server's certificate
+     * 
      * @return
      * @throws Exception
      */
     public HttpCon createClient() throws Exception {
-		ArrayList<Header> defheaders = new ArrayList<Header>();
-		defheaders.add(new BasicHeader("X-Csrf-Token", "1"));
+        ArrayList<Header> defheaders = new ArrayList<Header>();
+        defheaders.add(new BasicHeader("X-Csrf-Token", "1"));
 
-		BasicHttpClientConnectionManager bhcm = new BasicHttpClientConnectionManager(
-				this.httpClientRegistry);
+        BasicHttpClientConnectionManager bhcm = new BasicHttpClientConnectionManager(this.httpClientRegistry);
 
-		RequestConfig rc = RequestConfig.custom().setCookieSpec(CookieSpecs.STANDARD).setRedirectsEnabled(false)
-				.build();
+        RequestConfig rc = RequestConfig.custom().setCookieSpec(CookieSpecs.STANDARD).setRedirectsEnabled(false)
+                .build();
 
-		CloseableHttpClient http = HttpClients.custom()
-				                  .setConnectionManager(bhcm)
-				                  .setDefaultHeaders(defheaders)
-				                  .setDefaultRequestConfig(rc)
-				                  .build();
+        CloseableHttpClient http = HttpClients.custom().setConnectionManager(bhcm).setDefaultHeaders(defheaders)
+                .setDefaultRequestConfig(rc).build();
 
-		HttpCon con = new HttpCon();
-		con.setBcm(bhcm);
-		con.setHttp(http);
+        HttpCon con = new HttpCon();
+        con.setBcm(bhcm);
+        con.setHttp(http);
 
-		return con;
+        return con;
 
-	}
-
+    }
 
     /**
      * Call a kubernetes web service via GET
+     * 
      * @param uri
      * @return
      * @throws Exception
      */
     public Map callWS(String uri) throws Exception {
-        return callWS(uri,null,10);
+        return callWS(uri, null, 10);
     }
 
     /**
      * Watch a Kubernetes object based on its URI
+     * 
      * @param uri
      * @throws Exception
      */
-    public void watchURI(String uri,String functionName) throws Exception {
+    public void watchURI(String uri, String functionName) throws Exception {
 
-        K8sUtils localK8s = new K8sUtils(Controller.tokenPath, Controller.rootCaPath, Controller.configMaps, Controller.kubernetesURL);
+        K8sUtils localK8s = new K8sUtils(Controller.tokenPath, Controller.rootCaPath, Controller.configMaps,
+                Controller.kubernetesURL);
         ScriptEngine localEngine = Controller.initializeJS(Controller.jsPath, Controller.namespace, localK8s);
         localK8s.setEngine(localEngine);
         StringBuffer b = new StringBuffer();
-		
-		b.append(this.url).append(uri);
-		HttpGet get = new HttpGet(b.toString());
-		b.setLength(0);
-		b.append("Bearer ").append(token);
-        get.addHeader(new BasicHeader("Authorization","Bearer " + token));
-        
+
+        b.append(this.url).append(uri);
+        HttpGet get = new HttpGet(b.toString());
+        b.setLength(0);
+        b.append("Bearer ").append(token);
+        get.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+
         HttpCon con = this.createClient();
 
         try {
@@ -238,39 +249,42 @@ public class K8sUtils {
 
         } finally {
             if (con != null) {
-				con.getBcm().shutdown();
-			}
+                con.getBcm().shutdown();
+            }
         }
 
     }
 
     /**
-     * GET an API via its URI, with a test function for success and a number of attempted retries
+     * GET an API via its URI, with a test function for success and a number of
+     * attempted retries
+     * 
      * @param uri
      * @param testFunction
      * @param count
      * @return
      * @throws Exception
      */
-    public Map callWS(String uri,String testFunction,int count) throws Exception {
-        
+    public Map callWS(String uri, String testFunction, int count) throws Exception {
+
         StringBuffer b = new StringBuffer();
-		
-		b.append(this.url).append(uri);
-		HttpGet get = new HttpGet(b.toString());
-		b.setLength(0);
-		b.append("Bearer ").append(token);
-        get.addHeader(new BasicHeader("Authorization","Bearer " + token));
-        
+
+        b.append(this.url).append(uri);
+        HttpGet get = new HttpGet(b.toString());
+        b.setLength(0);
+        b.append("Bearer ").append(token);
+        get.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+
         HttpCon con = this.createClient();
         try {
-		    HttpResponse resp = con.getHttp().execute(get);
-		    String json = EntityUtils.toString(resp.getEntity());
+            HttpResponse resp = con.getHttp().execute(get);
+            String json = EntityUtils.toString(resp.getEntity());
             Map ret = new HashMap();
-            ret.put("code",resp.getStatusLine().getStatusCode());
-            ret.put("data",json);
+            ret.put("code", resp.getStatusLine().getStatusCode());
+            ret.put("data", json);
 
-            if (count >= 0 && (resp.getStatusLine().getStatusCode() < 200 || resp.getStatusLine().getStatusCode() > 299)) {
+            if (count >= 0
+                    && (resp.getStatusLine().getStatusCode() < 200 || resp.getStatusLine().getStatusCode() > 299)) {
                 System.err.println("Problem calling '" + uri + "' - " + resp.getStatusLine().getStatusCode());
                 System.err.println(json);
 
@@ -284,10 +298,9 @@ public class K8sUtils {
             }
 
             if (testFunction != null) {
-                engine.getBindings(ScriptContext.ENGINE_SCOPE).put("check_ws_response",false);
-                engine.getBindings(ScriptContext.ENGINE_SCOPE).put("ws_response_json",json);
+                engine.getBindings(ScriptContext.ENGINE_SCOPE).put("check_ws_response", false);
+                engine.getBindings(ScriptContext.ENGINE_SCOPE).put("ws_response_json", json);
 
-                
                 try {
                     engine.eval(testFunction);
                 } catch (Throwable t) {
@@ -298,54 +311,54 @@ public class K8sUtils {
                         Thread.sleep(10000);
                         System.err.println("trying again");
                         return callWS(uri, testFunction, --count);
-    
+
                     }
                 }
 
-                if (! ((Boolean) engine.getBindings(ScriptContext.ENGINE_SCOPE).get("check_ws_response"))) {
+                if (!((Boolean) engine.getBindings(ScriptContext.ENGINE_SCOPE).get("check_ws_response"))) {
                     System.err.println("Verification for '" + uri + "' failed / " + json);
                     if (count > 0) {
                         System.err.println("Sleeping, then trying again");
                         Thread.sleep(10000);
                         System.err.println("trying again");
                         return callWS(uri, testFunction, --count);
-    
+
                     }
                 }
             }
 
-
             return ret;
         } finally {
             if (con != null) {
-				con.getBcm().shutdown();
-			}
+                con.getBcm().shutdown();
+            }
         }
     }
 
     /**
      * DELETE a Kubernetes object
+     * 
      * @param uri
      * @return
      * @throws Exception
      */
     public Map deleteWS(String uri) throws Exception {
-        
+
         StringBuffer b = new StringBuffer();
-		
-		b.append(this.url).append(uri);
-		HttpDelete delete = new HttpDelete(b.toString());
-		b.setLength(0);
-		b.append("Bearer ").append(token);
-        delete.addHeader(new BasicHeader("Authorization","Bearer " + token));
-        
+
+        b.append(this.url).append(uri);
+        HttpDelete delete = new HttpDelete(b.toString());
+        b.setLength(0);
+        b.append("Bearer ").append(token);
+        delete.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+
         HttpCon con = this.createClient();
         try {
-		    HttpResponse resp = con.getHttp().execute(delete);
-		    String json = EntityUtils.toString(resp.getEntity());
+            HttpResponse resp = con.getHttp().execute(delete);
+            String json = EntityUtils.toString(resp.getEntity());
             Map ret = new HashMap();
-            ret.put("code",resp.getStatusLine().getStatusCode());
-            ret.put("data",json);
+            ret.put("code", resp.getStatusLine().getStatusCode());
+            ret.put("data", json);
 
             if (resp.getStatusLine().getStatusCode() < 200 || resp.getStatusLine().getStatusCode() > 299) {
                 System.err.println("Problem calling '" + uri + "' - " + resp.getStatusLine().getStatusCode());
@@ -355,37 +368,38 @@ public class K8sUtils {
             return ret;
         } finally {
             if (con != null) {
-				con.getBcm().shutdown();
-			}
+                con.getBcm().shutdown();
+            }
         }
     }
-    
+
     /**
      * POST to an API URI
+     * 
      * @param uri
      * @param json
      * @return
      * @throws Exception
      */
-    public Map postWS(String uri,String json) throws Exception {
+    public Map postWS(String uri, String json) throws Exception {
         StringBuffer b = new StringBuffer();
-		
-		b.append(this.url).append(uri);
-		HttpPost post = new HttpPost(b.toString());
-		b.setLength(0);
-		b.append("Bearer ").append(token);
-        post.addHeader(new BasicHeader("Authorization","Bearer " + token));
-        
-        StringEntity str = new StringEntity(json,ContentType.APPLICATION_JSON);
-		post.setEntity(str);
+
+        b.append(this.url).append(uri);
+        HttpPost post = new HttpPost(b.toString());
+        b.setLength(0);
+        b.append("Bearer ").append(token);
+        post.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+
+        StringEntity str = new StringEntity(json, ContentType.APPLICATION_JSON);
+        post.setEntity(str);
 
         HttpCon con = this.createClient();
         try {
-		    HttpResponse resp = con.getHttp().execute(post);
-		    String jsonResponse = EntityUtils.toString(resp.getEntity());
+            HttpResponse resp = con.getHttp().execute(post);
+            String jsonResponse = EntityUtils.toString(resp.getEntity());
             Map ret = new HashMap();
-            ret.put("code",resp.getStatusLine().getStatusCode());
-            ret.put("data",jsonResponse);
+            ret.put("code", resp.getStatusLine().getStatusCode());
+            ret.put("data", jsonResponse);
 
             if (resp.getStatusLine().getStatusCode() < 200 || resp.getStatusLine().getStatusCode() > 299) {
                 System.err.println("Problem calling '" + uri + "' - " + resp.getStatusLine().getStatusCode());
@@ -395,38 +409,81 @@ public class K8sUtils {
             return ret;
         } finally {
             if (con != null) {
-				con.getBcm().shutdown();
-			}
+                con.getBcm().shutdown();
+            }
+        }
+    }
+
+
+    /**
+     * PUT to a URI
+     * 
+     * @param uri
+     * @param json
+     * @return
+     * @throws Exception
+     */
+    public Map patchWS(String uri, String json) throws Exception {
+        StringBuffer b = new StringBuffer();
+
+        b.append(this.url).append(uri);
+        HttpPatch patch = new HttpPatch(b.toString());
+        b.setLength(0);
+        b.append("Bearer ").append(token);
+        patch.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+
+        patch.setEntity(EntityBuilder.create().setContentType(ContentType.create("application/merge-patch+json")).setText(json).build());
+
+
+
+        HttpCon con = this.createClient();
+        try {
+            HttpResponse resp = con.getHttp().execute(patch);
+            String jsonResponse = EntityUtils.toString(resp.getEntity());
+            Map ret = new HashMap();
+            ret.put("code", resp.getStatusLine().getStatusCode());
+            ret.put("data", jsonResponse);
+
+            if (resp.getStatusLine().getStatusCode() < 200 || resp.getStatusLine().getStatusCode() > 299) {
+                System.err.println("Problem calling '" + uri + "' - " + resp.getStatusLine().getStatusCode());
+                System.err.println(json);
+            }
+
+            return ret;
+        } finally {
+            if (con != null) {
+                con.getBcm().shutdown();
+            }
         }
     }
 
     /**
      * PUT to a URI
+     * 
      * @param uri
      * @param json
      * @return
      * @throws Exception
      */
-    public Map putWS(String uri,String json) throws Exception {
+    public Map putWS(String uri, String json) throws Exception {
         StringBuffer b = new StringBuffer();
-		
-		b.append(this.url).append(uri);
-		HttpPut post = new HttpPut(b.toString());
-		b.setLength(0);
-		b.append("Bearer ").append(token);
-        post.addHeader(new BasicHeader("Authorization","Bearer " + token));
-        
-        StringEntity str = new StringEntity(json,ContentType.APPLICATION_JSON);
-		post.setEntity(str);
+
+        b.append(this.url).append(uri);
+        HttpPut post = new HttpPut(b.toString());
+        b.setLength(0);
+        b.append("Bearer ").append(token);
+        post.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+
+        StringEntity str = new StringEntity(json, ContentType.APPLICATION_JSON);
+        post.setEntity(str);
 
         HttpCon con = this.createClient();
         try {
-		    HttpResponse resp = con.getHttp().execute(post);
-		    String jsonResponse = EntityUtils.toString(resp.getEntity());
+            HttpResponse resp = con.getHttp().execute(post);
+            String jsonResponse = EntityUtils.toString(resp.getEntity());
             Map ret = new HashMap();
-            ret.put("code",resp.getStatusLine().getStatusCode());
-            ret.put("data",jsonResponse);
-
+            ret.put("code", resp.getStatusLine().getStatusCode());
+            ret.put("data", jsonResponse);
 
             if (resp.getStatusLine().getStatusCode() < 200 || resp.getStatusLine().getStatusCode() > 299) {
                 System.err.println("Problem calling '" + uri + "' - " + resp.getStatusLine().getStatusCode());
@@ -436,14 +493,14 @@ public class K8sUtils {
             return ret;
         } finally {
             if (con != null) {
-				con.getBcm().shutdown();
-			}
+                con.getBcm().shutdown();
+            }
         }
     }
 
-
     /**
      * Returns a certificate from the internal keystore
+     * 
      * @param name
      * @return
      * @throws KeyStoreException
@@ -454,6 +511,7 @@ public class K8sUtils {
 
     /**
      * Base64 encode a Map of name/value pairs
+     * 
      * @param data
      * @return
      * @throws UnsupportedEncodingException
@@ -463,22 +521,24 @@ public class K8sUtils {
         for (Object k : data.keySet()) {
             vals += k + "=" + data.get(k) + "\n";
         }
-        vals = vals.substring(0,vals.length()-1);
+        vals = vals.substring(0, vals.length() - 1);
         return Base64.getEncoder().encodeToString(vals.getBytes("UTF-8"));
     }
 
     /**
-     * Simple template processor replacing name/value pairs from the map to anything enclused in #[] so #[MY_VALUE] would be replaced with the value from the map associated with the key MY_VALUE
+     * Simple template processor replacing name/value pairs from the map to anything
+     * enclused in #[] so #[MY_VALUE] would be replaced with the value from the map
+     * associated with the key MY_VALUE
+     * 
      * @param template
      * @param vars
      * @return
      */
-    public String processTemplate(String template,Map vars) {
+    public String processTemplate(String template, Map vars) {
         StringBuffer newConfig = new StringBuffer();
         newConfig.setLength(0);
 
-        int begin,end;
-
+        int begin, end;
 
         begin = 0;
         end = 0;
@@ -488,25 +548,23 @@ public class K8sUtils {
         begin = template.indexOf("#[");
         while (begin > 0) {
             if (end == 0) {
-                newConfig.append(template.substring(0,begin));
+                newConfig.append(template.substring(0, begin));
             } else {
-                newConfig.append(template.substring(end,begin));
+                newConfig.append(template.substring(end, begin));
             }
 
-            end = template.indexOf(']',begin + 2);
+            end = template.indexOf(']', begin + 2);
 
-            String envVarName = template.substring(begin + 2,end);
+            String envVarName = template.substring(begin + 2, end);
             String value = (String) vars.get(envVarName);
 
             if (value == null) {
                 value = "";
             }
 
-            
-
             newConfig.append(value);
 
-            begin = template.indexOf("#[",end + 1);
+            begin = template.indexOf("#[", end + 1);
             end++;
         }
 
@@ -518,13 +576,16 @@ public class K8sUtils {
     }
 
     /**
-     * Run kubectl create with the data passed in using the service account of the container
+     * Run kubectl create with the data passed in using the service account of the
+     * container
+     * 
      * @param data
      * @throws IOException
      * @throws InterruptedException
      */
     public void kubectlCreate(String data) throws IOException, InterruptedException {
-        Process p = Runtime.getRuntime().exec(new String[]{"kubectl","--token=" + this.token ,"--server=" + this.url ,"--certificate-authority=" + this.pathToCaCert ,"create","-f","-"});
+        Process p = Runtime.getRuntime().exec(new String[] { "kubectl", "--token=" + this.token, "--server=" + this.url,
+                "--certificate-authority=" + this.pathToCaCert, "create", "-f", "-" });
 
         new Thread() {
             public void run() {
@@ -580,6 +641,13 @@ public class K8sUtils {
      */
     public ScriptEngine getEngine() {
         return engine;
+    }
+
+    public String json2yaml(String json) throws IOException {
+        JsonNode jsonNodeTree = new ObjectMapper().readTree(json);
+        String jsonAsYaml = new YAMLMapper().writeValueAsString(jsonNodeTree);
+        return jsonAsYaml;
+
     }
     
 }
