@@ -44,6 +44,8 @@ import java.util.Map;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.SecretKeySpec;
 import javax.security.auth.x500.X500Principal;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -92,6 +94,24 @@ public class CertUtils {
         kg.init(256, secRandom);
         SecretKey sk = kg.generateKey();
         ks.setKeyEntry(alias, sk, ksPassword.toCharArray(), null);
+    }
+
+    /**
+     * Exports a key to a base64 encoded string
+     */
+    public static String exportKey(KeyStore ks,String alias,String ksPassword) throws Exception {
+        SecretKey key = (SecretKey) ks.getKey(alias, ksPassword.toCharArray());
+        return java.util.Base64.getEncoder().encodeToString(key.getEncoded());
+    }
+
+    /**
+     * Stores the key in the keystore
+     */
+    public static void storeKey(KeyStore ks,String alias,String ksPassword,String encodedKey)
+            throws KeyStoreException {
+        byte[] rawKey = java.util.Base64.getDecoder().decode(encodedKey);
+        SecretKey sc = new SecretKeySpec(rawKey,"AES");
+        ks.setKeyEntry(alias, sc, ksPassword.toCharArray(),null);
     }
 
     /**
