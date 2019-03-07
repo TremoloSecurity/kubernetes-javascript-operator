@@ -17,7 +17,9 @@ package com.tremolosecurity.kubernetes.artifacts.run;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
@@ -29,6 +31,7 @@ import java.util.stream.Collectors;
 import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
+import javax.script.ScriptException;
 
 import com.tremolosecurity.kubernetes.artifacts.util.K8sUtils;
 
@@ -49,16 +52,21 @@ public class Controller {
 
     static boolean stillWatching;
 
+    public static String tokenPath;
+    public static String rootCaPath;
+    public static String configMaps;
+    public static String kubernetesURL;
+    public static String jsPath;
+    public static String namespace;
+
     public static void main(String[] args) throws Exception {
 
-
-        Runtime.getRuntime().addShutdownHook(new Thread()  { 
-            public void run() { 
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            public void run() {
                 System.out.println("Cought the shutdown hook");
                 stillWatching = false;
-            }    
-        }); 
-
+            }
+        });
 
         Options options = new Options();
         options.addOption("tokenPath", true, "The path to the token to use when communicating with the API server");
@@ -71,7 +79,7 @@ public class Controller {
         options.addOption("apiGroup", true, "version and group");
         options.addOption("namespace", true, "namespace");
         options.addOption("objectType", true, "CRD type");
-        
+
         options.addOption("help", false, "Prints this message");
 
         CommandLineParser parser = new DefaultParser();
@@ -83,37 +91,22 @@ public class Controller {
             HelpFormatter formatter = new HelpFormatter();
             formatter.printHelp("Kubernetes Javascript Operator Options", options);
         } else {
-            String tokenPath = loadOption(cmd, "tokenPath", options);
-            String rootCaPath = loadOption(cmd, "rootCaPath", options);
-            String configMaps = loadOption(cmd, "configMaps", options);
-            String kubernetesURL = loadOption(cmd, "kubernetesURL", options);
-            String jsPath = loadOption(cmd,"jsPath",options);
+            tokenPath = loadOption(cmd, "tokenPath", options);
+            rootCaPath = loadOption(cmd, "rootCaPath", options);
+            configMaps = loadOption(cmd, "configMaps", options);
+            kubernetesURL = loadOption(cmd, "kubernetesURL", options);
+            jsPath = loadOption(cmd, "jsPath", options);
 
             String apiGroup = loadOption(cmd, "apiGroup", options);
-            String namespace = loadOption(cmd, "namespace", options);
+            namespace = loadOption(cmd, "namespace", options);
             String objectType = loadOption(cmd, "objectType", options);
-            
 
             K8sUtils k8s = new K8sUtils(tokenPath, rootCaPath, configMaps, kubernetesURL);
 
-            
-
             Security.addProvider(new BouncyCastleProvider());
-            ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
-            
-            engine.getBindings(ScriptContext.ENGINE_SCOPE).put("k8s", k8s);
-            engine.getBindings(ScriptContext.ENGINE_SCOPE).put("k8s_namespace",namespace);
-            engine.getBindings(ScriptContext.ENGINE_SCOPE).put("js",engine);
-            
-            File[] scripts = new File(jsPath).listFiles();
-            for (File script : scripts) {
-                if (script.getAbsolutePath().endsWith(".js")) {
-                    System.out.println("Loading Script : '" + script.getAbsolutePath() + "'");
-                    engine.eval(new BufferedReader(new InputStreamReader(script.toURL().openStream())));
-                }
-            } 
+            //ScriptEngine engine = initializeJS(jsPath, namespace, k8s);
 
-            k8s.setEngine(engine);
+            k8s.setEngine(null);
             while (stillWatching) {
                 runWatch(apiGroup, namespace, objectType, k8s);
             }
@@ -121,6 +114,24 @@ public class Controller {
             // engine.eval(new BufferedReader(new
             // InputStreamReader(scriptURL.openStream())));
         }
+    }
+
+    public static ScriptEngine initializeJS(String jsPath, String namespace, K8sUtils k8s)
+            throws ScriptException, IOException, MalformedURLException {
+        ScriptEngine engine = new ScriptEngineManager().getEngineByName("nashorn");
+
+        engine.getBindings(ScriptContext.ENGINE_SCOPE).put("k8s", k8s);
+        engine.getBindings(ScriptContext.ENGINE_SCOPE).put("k8s_namespace", namespace);
+        engine.getBindings(ScriptContext.ENGINE_SCOPE).put("js", engine);
+
+        File[] scripts = new File(jsPath).listFiles();
+        for (File script : scripts) {
+            if (script.getAbsolutePath().endsWith(".js")) {
+                System.out.println("Loading Script : '" + script.getAbsolutePath() + "'");
+                engine.eval(new BufferedReader(new InputStreamReader(script.toURL().openStream())));
+            }
+        }
+        return engine;
     }
 
     private static void runWatch(String apiGroup, String namespace, String objectType, K8sUtils k8s)

@@ -47,6 +47,7 @@ import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 
 import com.tremolosecurity.kubernetes.artifacts.obj.HttpCon;
+import com.tremolosecurity.kubernetes.artifacts.run.Controller;
 
 import org.apache.http.Header;
 import org.apache.http.HttpResponse;
@@ -210,6 +211,9 @@ public class K8sUtils {
      */
     public void watchURI(String uri,String functionName) throws Exception {
 
+        K8sUtils localK8s = new K8sUtils(Controller.tokenPath, Controller.rootCaPath, Controller.configMaps, Controller.kubernetesURL);
+        ScriptEngine localEngine = Controller.initializeJS(Controller.jsPath, Controller.namespace, localK8s);
+        localK8s.setEngine(localEngine);
         StringBuffer b = new StringBuffer();
 		
 		b.append(this.url).append(uri);
@@ -227,7 +231,7 @@ public class K8sUtils {
 
             String line = null;
             while ((line = in.readLine()) != null) {
-                Invocable invocable = (Invocable) engine;
+                Invocable invocable = (Invocable) localEngine;
                 invocable.invokeFunction(functionName, line);
 
             }
