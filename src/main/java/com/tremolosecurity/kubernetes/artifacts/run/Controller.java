@@ -98,7 +98,17 @@ public class Controller {
             jsPath = loadOption(cmd, "jsPath", options);
 
             String apiGroup = loadOption(cmd, "apiGroup", options);
+            
+            
+            
             namespace = loadOption(cmd, "namespace", options);
+            
+            String fromEnv = System.getenv(namespace);
+
+            if (fromEnv != null) {
+                namespace = fromEnv;
+            }
+            
             String objectType = loadOption(cmd, "objectType", options);
 
             K8sUtils k8s = new K8sUtils(tokenPath, rootCaPath, configMaps, kubernetesURL);

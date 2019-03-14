@@ -9,9 +9,9 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.tremolosecurity.kubernetes</groupId>
-	<artifactId>artifact-deployment</artifactId>
+	<artifactId>javascript-operator</artifactId>
 	<version>1.0.0</version>
-	<name>artifact-deployment</name>
+	<name>javascript-operator</name>
 	<packaging>jar</packaging>
 
 
@@ -44,8 +44,8 @@
 		</repository>
 		<repository>
 			<id>nexus.tremolo.io</id>
-			<name>tremolo.io-releases</name>
-			<url>https://nexus.tremolo.io/repository/releases/</url>
+			<name>tremolo.io-betas</name>
+			<url>https://nexus.tremolo.io/repository/betas/</url>
 		</repository>
 
 
@@ -59,7 +59,7 @@
 		<repository>
 			<id>nexus.tremolo.io</id>
 			<name>tremolo.io-releases</name>
-			<url>https://nexus.tremolo.io/repository/releases/</url>
+			<url>https://nexus.tremolo.io/repository/betas/</url>
 		</repository>
 
 	</distributionManagement>
