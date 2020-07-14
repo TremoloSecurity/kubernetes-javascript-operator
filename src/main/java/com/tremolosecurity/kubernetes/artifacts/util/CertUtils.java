@@ -32,13 +32,18 @@ import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
 import java.security.SecureRandom;
 import java.security.SignatureException;
+import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -76,6 +81,7 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.pkcs.PKCS10CertificationRequestBuilder;
 import org.bouncycastle.util.io.pem.PemWriter;
 import org.bouncycastle.x509.X509V3CertificateGenerator;
+import org.joda.time.DateTime;
 
 /**
  * Static utility class meant for being called from within javascript
@@ -99,7 +105,7 @@ public class CertUtils {
     /**
      * Exports a key to a base64 encoded string
      */
-    public static String exportKey(KeyStore ks,String alias,String ksPassword) throws Exception {
+    public static String exportKey(KeyStore ks, String alias, String ksPassword) throws Exception {
         SecretKey key = (SecretKey) ks.getKey(alias, ksPassword.toCharArray());
         return java.util.Base64.getEncoder().encodeToString(key.getEncoded());
     }
@@ -107,11 +113,11 @@ public class CertUtils {
     /**
      * Stores the key in the keystore
      */
-    public static void storeKey(KeyStore ks,String alias,String ksPassword,String encodedKey)
+    public static void storeKey(KeyStore ks, String alias, String ksPassword, String encodedKey)
             throws KeyStoreException {
         byte[] rawKey = java.util.Base64.getDecoder().decode(encodedKey);
-        SecretKey sc = new SecretKeySpec(rawKey,"AES");
-        ks.setKeyEntry(alias, sc, ksPassword.toCharArray(),null);
+        SecretKey sc = new SecretKeySpec(rawKey, "AES");
+        ks.setKeyEntry(alias, sc, ksPassword.toCharArray(), null);
     }
 
     /**
@@ -165,7 +171,7 @@ public class CertUtils {
         GeneralName[] names = new GeneralName[certData.getSubjectAlternativeNames().size() + 1];
         names[0] = new GeneralName(GeneralName.dNSName, certData.getServerName());
         for (int i = 0; i < certData.getSubjectAlternativeNames().size(); i++) {
-            names[i + 1] = new GeneralName(GeneralName.dNSName, certData.getSubjectAlternativeNames().get(0));
+            names[i + 1] = new GeneralName(GeneralName.dNSName, certData.getSubjectAlternativeNames().get(i));
         }
 
         GeneralNames subjectAltName = new GeneralNames(names);
@@ -232,6 +238,17 @@ public class CertUtils {
         b64Cert = b64Cert.replace("\n", "");
         // System.out.println(b64Cert);
         ByteArrayInputStream bais = new ByteArrayInputStream(Base64.decodeBase64(b64Cert));
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        Collection<? extends java.security.cert.Certificate> c = cf.generateCertificates(bais);
+        return (X509Certificate) c.iterator().next();
+    }
+
+    public static X509Certificate pem2cert(String pem) throws Exception {
+        if (! pem.startsWith("-")) {
+            pem = new String(java.util.Base64.getDecoder().decode(pem));
+        }
+
+        ByteArrayInputStream bais = new ByteArrayInputStream(pem.getBytes("UTF-8"));
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
         Collection<? extends java.security.cert.Certificate> c = cf.generateCertificates(bais);
         return (X509Certificate) c.iterator().next();
@@ -314,7 +331,12 @@ public class CertUtils {
             Iterator<? extends java.security.cert.Certificate> i = c.iterator();
             while (i.hasNext()) {
                 Certificate certificate = (Certificate) i.next();
-                ks.setCertificateEntry(alias + "-" + j, certificate);
+                if (j == 0) {
+                    ks.setCertificateEntry(alias, certificate);
+                } else {
+                    ks.setCertificateEntry(alias + "-" + j, certificate);
+                }
+                j++;
             }
         } else {
             ks.setCertificateEntry(alias, c.iterator().next());
@@ -324,6 +346,12 @@ public class CertUtils {
 
     private static Collection<? extends java.security.cert.Certificate> pem2certs(String pemCert)
             throws UnsupportedEncodingException, CertificateException {
+
+        if (! pemCert.startsWith("-")) {
+            pemCert = new String(java.util.Base64.getDecoder().decode(pemCert));
+        }
+
+
         ByteArrayInputStream bais = new ByteArrayInputStream(pemCert.getBytes("UTF-8"));
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
         Collection<? extends java.security.cert.Certificate> c = cf.generateCertificates(bais);
@@ -376,6 +404,7 @@ public class CertUtils {
      */
     public static String encodeKeyStore(KeyStore ks, String ksPassword)
             throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException {
+
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         ks.store(baos, ksPassword.toCharArray());
         return java.util.Base64.getEncoder().encodeToString(baos.toByteArray());
@@ -384,25 +413,137 @@ public class CertUtils {
     public static void importKeyPairAndCert(KeyStore ks, String ksPass, String alias, String privateKeyEncoded,
             String certEncoded) throws IOException, CertificateException, KeyStoreException, NoSuchAlgorithmException,
             InvalidKeySpecException {
-        
+
         String privateKeyPEM = new String(java.util.Base64.getDecoder().decode(privateKeyEncoded));
 
-        privateKeyPEM = privateKeyPEM.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "");//.trim();//.replaceAll("[\n,\r]", "").trim();
+        privateKeyPEM = privateKeyPEM.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----",
+                "");// .trim();//.replaceAll("[\n,\r]", "").trim();
         byte[] pkBytes = org.bouncycastle.util.encoders.Base64.decode(privateKeyPEM);
-        PKCS8EncodedKeySpec kspec = new PKCS8EncodedKeySpec(pkBytes);  
-        KeyFactory kf = KeyFactory.getInstance("RSA");  
-        PrivateKey unencryptedPrivateKey = kf.generatePrivate(kspec);  
+        PKCS8EncodedKeySpec kspec = new PKCS8EncodedKeySpec(pkBytes);
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+        PrivateKey unencryptedPrivateKey = kf.generatePrivate(kspec);
 
-        //System.out.println(privateKeyPEM);
-        
+        // System.out.println(privateKeyPEM);
 
-        //PrivateKey privateKey = PrivateKeyFactory.createKey(new ByteArrayInputStream(java.util.Base64.getDecoder().decode(privateKeyEncoded)));
+        // PrivateKey privateKey = PrivateKeyFactory.createKey(new
+        // ByteArrayInputStream(java.util.Base64.getDecoder().decode(privateKeyEncoded)));
 
         String pemEncodedCert = new String(java.util.Base64.getDecoder().decode(certEncoded));
         Collection<? extends Certificate> certs = pem2certs(pemEncodedCert);
 
-        ks.setKeyEntry(alias, unencryptedPrivateKey, ksPass.toCharArray(), new Certificate[]{certs.iterator().next()});
+        ks.setKeyEntry(alias, unencryptedPrivateKey, ksPass.toCharArray(),
+                new Certificate[] { certs.iterator().next() });
+
+    }
+
+    public static void importKeyPairAndCertPem(KeyStore ks, String ksPass, String alias, String privateKeyPEM,
+            String pemEncodedCert) throws IOException, CertificateException, KeyStoreException, NoSuchAlgorithmException,
+            InvalidKeySpecException {
 
         
+
+        privateKeyPEM = privateKeyPEM.replace("-----BEGIN RSA PRIVATE KEY-----", "").replace("-----END RSA PRIVATE KEY-----",
+                "");// .trim();//.replaceAll("[\n,\r]", "").trim();
+        byte[] pkBytes = org.bouncycastle.util.encoders.Base64.decode(privateKeyPEM);
+        PKCS8EncodedKeySpec kspec = new PKCS8EncodedKeySpec(pkBytes);
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+        PrivateKey unencryptedPrivateKey = kf.generatePrivate(kspec);
+
+        // System.out.println(privateKeyPEM);
+
+        // PrivateKey privateKey = PrivateKeyFactory.createKey(new
+        // ByteArrayInputStream(java.util.Base64.getDecoder().decode(privateKeyEncoded)));
+
+        
+        Collection<? extends Certificate> certs = pem2certs(pemEncodedCert);
+
+        ks.setKeyEntry(alias, unencryptedPrivateKey, ksPass.toCharArray(),
+                new Certificate[] { certs.iterator().next() });
+
+    }
+
+    public static KeyStore decodeKeystore(String base64EncodedKS,String ksPassword) throws KeyStoreException {
+        ByteArrayInputStream bais = new ByteArrayInputStream(java.util.Base64.getDecoder().decode(base64EncodedKS));
+        KeyStore newKS = KeyStore.getInstance("PKCS12");
+        try {
+            newKS.load(bais, ksPassword.toCharArray());
+            return newKS;
+        } catch (NoSuchAlgorithmException | CertificateException | IOException e) {
+            return null;
+        }
+    }
+
+    public static boolean keystoresEqual(KeyStore ks1, KeyStore ks2, String ksPassword) {
+        
+        try {
+            HashSet<String> checked = new HashSet<String>();
+
+            Enumeration<String> ks1Aliases = ks1.aliases();
+
+            while (ks1Aliases.hasMoreElements()) {
+                String alias1 = ks1Aliases.nextElement();
+                X509Certificate cert1 = (X509Certificate) ks1.getCertificate(alias1);
+
+                if (cert1 != null) {
+                    X509Certificate cert2 = (X509Certificate) ks2.getCertificate(alias1);
+                    if (cert2 == null) {
+                        return false;
+                    } else if (! Arrays.equals(cert1.getSignature(),cert2.getSignature())) {
+                        return false;
+                    } else {
+                        checked.add(alias1);
+                    }
+                } else {
+                    SecretKey key1 = (SecretKey) ks1.getKey(alias1, ksPassword.toCharArray());
+                    SecretKey key2 = (SecretKey) ks2.getKey(alias1, ksPassword.toCharArray());
+                    if (key2 == null) {
+                        return false;
+                    } else if (! Arrays.equals(key1.getEncoded(), key2.getEncoded())) {
+                        return false;
+                    } else {
+                        checked.add(alias1);
+                    }
+                }
+            }
+
+            Enumeration<String> ks2Aliases = ks2.aliases();
+            while (ks2Aliases.hasMoreElements()) {
+                if (! checked.contains(ks2Aliases.nextElement())) {
+                    //doesn't matter the content, its failed
+                    return false;
+                }
+            }
+
+
+            return true;
+        } catch (Exception e ) {
+            return false;
+        }
+
+    }
+
+    public static Map<String,String> exportCerts(KeyStore ks,String ksPwd) throws Exception {
+        Map<String,String> certs = new HashMap<String,String>();
+        
+        Enumeration<String> aliases = ks.aliases();
+
+        while (aliases.hasMoreElements()) {
+            String alias = aliases.nextElement();
+            X509Certificate cert = (X509Certificate) ks.getCertificate(alias);
+            if (cert != null) {
+                if (ks.getKey(alias, ksPwd.toCharArray()) == null) {
+                    certs.put(alias, CertUtils.exportCert(cert));
+                }
+            }
+        }
+
+        return certs;
+    }
+
+    public static boolean isCertExpiring(X509Certificate cert,int daysOut) {
+        DateTime expiresOn = new DateTime(cert.getNotAfter());
+        DateTime checkExpires = new DateTime().plusDays(daysOut);
+
+        return checkExpires.isAfter(expiresOn);
     }
 }

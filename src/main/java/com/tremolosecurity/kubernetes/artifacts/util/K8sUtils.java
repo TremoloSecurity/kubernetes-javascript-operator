@@ -29,17 +29,22 @@ import java.nio.file.Paths;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import javax.imageio.stream.FileImageInputStream;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.script.Invocable;
@@ -77,7 +82,16 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.BasicHttpClientConnectionManager;
 import org.apache.http.message.BasicHeader;
 import org.apache.http.util.EntityUtils;
+import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormat;
+import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+
+import io.kubernetes.client.openapi.ApiClient;
+import io.kubernetes.client.openapi.Configuration;
+import io.kubernetes.client.util.ClientBuilder;
+import io.kubernetes.client.util.KubeConfig;
 
 /**
  * K8sUtils
@@ -93,8 +107,16 @@ public class K8sUtils {
     private RequestConfig globalHttpClientConfig;
     String url;
     String pathToCaCert;
-
+    String caCert;
     ScriptEngine engine;
+
+    private Map<String,Object> additionalStatuses;
+
+    private boolean openShift;
+
+    private Map<String,String> extraCerts;
+
+    static HashSet<String> processedVersions = new HashSet<String>();
 
     /**
      * Initialization
@@ -103,28 +125,56 @@ public class K8sUtils {
      * @param pathToCA
      * @param pathToMoreCerts
      * @param apiServerURL
-     * @throws IOException
-     * @throws KeyStoreException
-     * @throws NoSuchAlgorithmException
-     * @throws CertificateException
-     * @throws UnrecoverableKeyException
-     * @throws KeyManagementException
+     * @throws Exception
      */
-    public K8sUtils(String pathToToken, String pathToCA, String pathToMoreCerts, String apiServerURL)
-            throws IOException, KeyStoreException, NoSuchAlgorithmException, CertificateException,
-            UnrecoverableKeyException, KeyManagementException {
+    public K8sUtils(String pathToToken, String pathToCA, String pathToMoreCerts, String apiServerURL) throws Exception {
         // get the token for talking to k8s
         this.token = new String(Files.readAllBytes(Paths.get(pathToToken)), StandardCharsets.UTF_8);
 
         this.pathToCaCert = pathToCA;
 
+        this.url = apiServerURL;
+
+        this.extraCerts = new HashMap<String,String>();
+
         this.ksPassword = UUID.randomUUID().toString();
         this.ks = KeyStore.getInstance("PKCS12");
         this.ks.load(null, this.ksPassword.toCharArray());
 
-        String caCert = new String(Files.readAllBytes(Paths.get(pathToCA)), StandardCharsets.UTF_8);
+        if (System.getenv().get("KUBECONFIG") != null) {
+            
+            String pathToKubeConfig = System.getenv("KUBECONFIG");
+            System.out.println("******* OVERRIDING WITH KUBECONFIG FROM '" + pathToKubeConfig + "' ******************");
+            
+            
+            KubeConfig kc = KubeConfig.loadKubeConfig(new InputStreamReader(new FileInputStream(pathToKubeConfig)));
+            String context = kc.getCurrentContext();
+            this.token = kc.getAccessToken();
 
-        CertUtils.importCertificate(ks, ksPassword, "k8s-master", caCert);
+            this.url = kc.getServer();
+
+            if (token == null) {
+                if (kc.getClientKeyData() != null) {
+                    String pemKey = new String(Base64.getDecoder().decode(kc.getClientKeyData()));
+                    String pemCert = new String(Base64.getDecoder().decode(kc.getClientCertificateData()));
+
+                    CertUtils.importKeyPairAndCertPem(this.ks, this.ksPassword, "k8sclient", pemKey, pemCert);
+                }
+
+                
+            }
+
+            if (kc.getCertificateAuthorityData() != null) {
+                CertUtils.importCertificate(ks, ksPassword, "k8s-master", new String(Base64.getDecoder().decode(kc.getCertificateAuthorityData())));
+            }
+        } else {
+            caCert = new String(Files.readAllBytes(Paths.get(pathToCA)), StandardCharsets.UTF_8);
+            CertUtils.importCertificate(ks, ksPassword, "k8s-master", caCert);
+        }
+
+        
+
+        
 
         File moreCerts = new File(pathToMoreCerts);
         if (moreCerts.exists() && moreCerts.isDirectory()) {
@@ -137,6 +187,7 @@ public class K8sUtils {
                 String certPem = new String(Files.readAllBytes(Paths.get(certFile.getAbsolutePath())),
                         StandardCharsets.UTF_8);
                 String alias = certFile.getName().substring(0, certFile.getName().indexOf('.'));
+                this.extraCerts.put(alias, certPem);
                 CertUtils.importCertificate(ks, ksPassword, alias, certPem);
             }
         }
@@ -171,8 +222,28 @@ public class K8sUtils {
         this.globalHttpClientConfig = RequestConfig.custom().setCookieSpec(CookieSpecs.IGNORE_COOKIES)
                 .setRedirectsEnabled(false).setAuthenticationEnabled(false).build();
 
-        this.url = apiServerURL;
+        
 
+        this.openShift = false;
+
+        Map<String,Object> res = this.callWS("/apis");
+        String json = (String) res.get("data");
+        
+
+        JSONParser parser = new JSONParser();
+        JSONObject root = (JSONObject) parser.parse(json);
+        JSONArray groups = (JSONArray) root.get("groups");
+
+        for (Object obj : groups) {
+            JSONObject group = (JSONObject) obj;
+            String name = (String) group.get("name");
+            if (name.toLowerCase().contains("openshift")) {
+                this.openShift = true;
+                break;
+            }
+        }
+
+        additionalStatuses = new HashMap<String,Object>();
     }
 
     /**
@@ -221,17 +292,27 @@ public class K8sUtils {
      */
     public void watchURI(String uri, String functionName) throws Exception {
 
+
+        
+
         K8sUtils localK8s = new K8sUtils(Controller.tokenPath, Controller.rootCaPath, Controller.configMaps,
                 Controller.kubernetesURL);
         ScriptEngine localEngine = Controller.initializeJS(Controller.jsPath, Controller.namespace, localK8s);
         localK8s.setEngine(localEngine);
         StringBuffer b = new StringBuffer();
 
+        System.out.println(uri);
+
+        System.out.println("Is OpenShift : " + localK8s.isOpenShift());
+
         b.append(this.url).append(uri);
         HttpGet get = new HttpGet(b.toString());
-        b.setLength(0);
-        b.append("Bearer ").append(token);
-        get.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+        
+        if (this.token != null) {
+            b.setLength(0);
+            b.append("Bearer ").append(token);
+            get.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+        }
 
         HttpCon con = this.createClient();
 
@@ -242,8 +323,92 @@ public class K8sUtils {
 
             String line = null;
             while ((line = in.readLine()) != null) {
+
+                JSONParser parser = new JSONParser();
+                JSONObject json = (JSONObject) parser.parse(line);
+
+                
+                JSONObject cr = (JSONObject) json.get("object");
+                JSONObject chkObj = new JSONObject();
+                chkObj.put("apiVersion", cr.get("apiVersion"));
+                chkObj.put("kind", cr.get("kind"));
+                chkObj.put("spec", cr.get("spec"));
+
+                JSONObject metadata = (JSONObject) parser.parse(((JSONObject)cr.get("metadata")).toJSONString());
+
+                String resourceVersion = (String) metadata.get("resourceVersion");
+
+                if (resourceVersion == null) {
+                    throw new Exception("No resourceVersion, restartinig watch");
+                }
+
+                System.out.println("Resource Version - " + resourceVersion + " - " + processedVersions.contains(resourceVersion));
+
+                if (processedVersions.contains(resourceVersion)) {
+                    System.out.println("Resource - " + resourceVersion + " - already processed, skipping");
+                    continue;
+                } else {
+                    processedVersions.add(resourceVersion);
+                }
+
+                metadata.remove("creationTimestamp");
+                metadata.remove("generation");
+                metadata.remove("resourceVersion");
+                metadata.remove("managedFields");
+                
+
+                chkObj.put("metadata", metadata);
+                
+                String jsonForChecksum = chkObj.toJSONString();
+                MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+                digest.update(jsonForChecksum.getBytes("UTF-8"),0,jsonForChecksum.getBytes("UTF-8").length);
+                byte[] digestBytes = digest.digest();
+                String digestBase64 = java.util.Base64.getEncoder().encodeToString(digestBytes);
+                    
+                if (json.get("type").equals("MODIFIED")) {
+                    if (json.get("object") != null && ((JSONObject) json.get("object")).get("status") != null && ((JSONObject) ((JSONObject) json.get("object")).get("status")).get("digest") != null) {
+                        String existingDigest = (String) ((JSONObject) ((JSONObject) json.get("object")).get("status")).get("digest");
+                        if (existingDigest.equals(digestBase64)) {
+                            continue;
+                        }
+                    }
+                }
+
                 Invocable invocable = (Invocable) localEngine;
-                invocable.invokeFunction(functionName, line);
+
+                boolean error = false;
+
+
+                String result = null;
+                
+                try {
+                    result = (String) invocable.invokeFunction(functionName, line);
+                } catch (Throwable t) {
+                    System.err.println("Error on watch - " + uri);
+                    t.printStackTrace(System.err);
+                    error = true;
+                }
+
+                if (error) {
+                    if (result != null) {
+                        result = "error-" + result;
+                    } else {
+                        result = "error";
+                    }
+                }
+
+                if (json.get("type").equals("MODIFIED") || json.get("type").equals("ADDED")) {
+                    JSONObject patch = this.generateJsonStatus(result, digestBase64,localK8s.getAdditionalStatuses());
+                    cr.put("status",patch);
+                    String selfLink = (String)  ((JSONObject) ((JSONObject) json.get("object")).get("metadata")).get("selfLink");
+
+                    this.putWS(selfLink + "/status", cr.toJSONString());
+                
+
+                }
+
+                
+                
 
             }
 
@@ -253,6 +418,45 @@ public class K8sUtils {
             }
         }
 
+    }
+
+    private JSONObject generateJsonStatus(String errorMessage,String digest, Map<String, Object> additionalStatuses) {
+        JSONObject patch = new JSONObject();
+        
+        patch.put("conditions", new JSONObject());
+        ((JSONObject) patch.get("conditions")).put("lastTransitionTime", DateTimeFormat.forPattern("yyyy-MM-dd hh:mm:ssz").print(new DateTime()));
+        patch.put("digest", digest);
+
+        if (errorMessage == null) {
+            ((JSONObject) patch.get("conditions")).put("status", "True");
+            ((JSONObject) patch.get("conditions")).put("type", "Completed");
+        } else {
+            ((JSONObject) patch.get("conditions")).put("status", "True");
+            ((JSONObject) patch.get("conditions")).put("type", "Failed");
+            ((JSONObject) patch.get("conditions")).put("status", "True");
+            ((JSONObject) patch.get("conditions")).put("reason", errorMessage);
+        }
+
+        for (String extraStatus : additionalStatuses.keySet()) {
+            this.addToJson(patch, extraStatus, additionalStatuses.get(extraStatus));
+        }
+
+        return patch;
+    }
+
+    private void addToJson(JSONObject root,String name,Object value) {
+        if (value instanceof String) {
+            root.put(name,value);
+        } else if (value instanceof Map) {
+            JSONObject newRoot = new JSONObject();
+            root.put(name, newRoot);
+            Map<String,Object> rootSet = (Map<String,Object>) value;
+            for (String keyName : rootSet.keySet()) {
+                addToJson(newRoot, keyName, rootSet.get(keyName));
+            }
+        } else {
+            System.out.println("Unknown type" + value);
+        }
     }
 
     /**
@@ -271,9 +475,11 @@ public class K8sUtils {
 
         b.append(this.url).append(uri);
         HttpGet get = new HttpGet(b.toString());
-        b.setLength(0);
-        b.append("Bearer ").append(token);
-        get.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+        if (this.token != null) {
+            b.setLength(0);
+            b.append("Bearer ").append(token);
+            get.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+        }
 
         HttpCon con = this.createClient();
         try {
@@ -297,7 +503,7 @@ public class K8sUtils {
                 }
             }
 
-            if (testFunction != null) {
+            if (testFunction != null && ! testFunction.isEmpty()) {
                 engine.getBindings(ScriptContext.ENGINE_SCOPE).put("check_ws_response", false);
                 engine.getBindings(ScriptContext.ENGINE_SCOPE).put("ws_response_json", json);
 
@@ -335,22 +541,30 @@ public class K8sUtils {
         }
     }
 
+    public Map deleteWS(String uri) throws Exception {
+        return deleteWS(uri,true);
+    }
+
     /**
      * DELETE a Kubernetes object
      * 
      * @param uri
+     * @param ignoreNotFound
      * @return
      * @throws Exception
      */
-    public Map deleteWS(String uri) throws Exception {
+    public Map deleteWS(String uri,boolean ignoreNotFound) throws Exception {
 
         StringBuffer b = new StringBuffer();
 
         b.append(this.url).append(uri);
         HttpDelete delete = new HttpDelete(b.toString());
-        b.setLength(0);
-        b.append("Bearer ").append(token);
-        delete.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+
+        if (this.token != null) {
+            b.setLength(0);
+            b.append("Bearer ").append(token);
+            delete.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+        }
 
         HttpCon con = this.createClient();
         try {
@@ -361,8 +575,10 @@ public class K8sUtils {
             ret.put("data", json);
 
             if (resp.getStatusLine().getStatusCode() < 200 || resp.getStatusLine().getStatusCode() > 299) {
-                System.err.println("Problem calling '" + uri + "' - " + resp.getStatusLine().getStatusCode());
-                System.err.println(json);
+                if (! (resp.getStatusLine().getStatusCode() == 404 && ignoreNotFound)) {
+                    System.err.println("Problem calling '" + uri + "' - " + resp.getStatusLine().getStatusCode());
+                    System.err.println(json);
+                }
             }
 
             return ret;
@@ -386,9 +602,11 @@ public class K8sUtils {
 
         b.append(this.url).append(uri);
         HttpPost post = new HttpPost(b.toString());
-        b.setLength(0);
-        b.append("Bearer ").append(token);
-        post.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+        if (this.token != null) {
+            b.setLength(0);
+            b.append("Bearer ").append(token);
+            post.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+        }
 
         StringEntity str = new StringEntity(json, ContentType.APPLICATION_JSON);
         post.setEntity(str);
@@ -428,10 +646,11 @@ public class K8sUtils {
 
         b.append(this.url).append(uri);
         HttpPatch patch = new HttpPatch(b.toString());
-        b.setLength(0);
-        b.append("Bearer ").append(token);
-        patch.addHeader(new BasicHeader("Authorization", "Bearer " + token));
-
+        if (this.token != null) {
+            b.setLength(0);
+            b.append("Bearer ").append(token);
+            patch.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+        }
         patch.setEntity(EntityBuilder.create().setContentType(ContentType.create("application/merge-patch+json")).setText(json).build());
 
 
@@ -470,10 +689,11 @@ public class K8sUtils {
 
         b.append(this.url).append(uri);
         HttpPut post = new HttpPut(b.toString());
-        b.setLength(0);
-        b.append("Bearer ").append(token);
-        post.addHeader(new BasicHeader("Authorization", "Bearer " + token));
-
+        if (this.token != null) {
+            b.setLength(0);
+            b.append("Bearer ").append(token);
+            post.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+        }
         StringEntity str = new StringEntity(json, ContentType.APPLICATION_JSON);
         post.setEntity(str);
 
@@ -649,5 +869,32 @@ public class K8sUtils {
         return jsonAsYaml;
 
     }
+
+    public String getCaCert() {
+        return this.caCert;
+    }
+
+    public boolean isOpenShift() {
+        return this.openShift;
+    }
     
+
+    /**
+     * @return the additionalStatuses
+     */
+    public Map<String, Object> getAdditionalStatuses() {
+        return additionalStatuses;
+    }
+
+    public KeyStore getKs() {
+        return this.ks;
+    }
+
+    public String getKsPassword() {
+        return this.ksPassword;
+    }
+
+    public Map<String,String> getExtraCerts() {
+        return this.extraCerts;
+    }
 }

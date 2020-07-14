@@ -30,6 +30,7 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 
 import com.tremolosecurity.kubernetes.artifacts.util.K8sUtils;
+import com.tremolosecurity.kubernetes.artifacts.util.NetUtil;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -70,6 +71,8 @@ public class RunDeployment {
             String deploymentTemplate = cmd.getOptionValue("deploymentTemplate");
             
             K8sUtils k8s = new K8sUtils(tokenPath,rootCaPath,extraCertsPath,kubernetesURL);
+
+            NetUtil.initialize(extraCertsPath);
 
             Map<String,String> inputParams = new HashMap<String,String>();
 

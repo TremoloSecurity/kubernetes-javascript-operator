@@ -37,7 +37,7 @@ public class CertificateData {
 
 	String sigAlg = "SHA256withRSA";
 	Date notBefore = new Date(System.currentTimeMillis());
-	Date notAfter = new Date(System.currentTimeMillis() + 315360000000L);
+	Date notAfter = new Date(System.currentTimeMillis() + 31536000000L);
 
 	SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy");
 

@@ -19,22 +19,24 @@
 		<commons-collections.version>3.2.2</commons-collections.version>
 		<commons-cli.version>1.4</commons-cli.version>
 		<xerces.version>2.12.0</xerces.version>
-		<bcprov-jdk15on.version>1.61</bcprov-jdk15on.version>
-		<bcprov-ext-jdk15on.version>1.61</bcprov-ext-jdk15on.version>
+		<bcprov-jdk15on.version>1.64</bcprov-jdk15on.version>
+		<bcprov-ext-jdk15on.version>1.64</bcprov-ext-jdk15on.version>
 		<log4j.version>2.11.0</log4j.version>
-		<bcpkix-jdk15on.version>1.61</bcpkix-jdk15on.version>
+		<bcpkix-jdk15on.version>1.64</bcpkix-jdk15on.version>
 		<xmlsec.version>2.0.5</xmlsec.version>
-		<joda-time.version>2.10.1</joda-time.version>
-		<commons-codec.version>1.12</commons-codec.version>
-		<httpclient.version>4.5.7</httpclient.version>
-		<httpcore.version>4.4.11</httpcore.version>
-		<httpmime.version>4.5.7</httpmime.version>
-		<jackson.version>2.9.8</jackson.version>
+		<joda-time.version>2.10.5</joda-time.version>
+		<commons-codec.version>1.14</commons-codec.version>
+		<httpclient.version>4.5.12</httpclient.version>
+		<httpcore.version>4.4.13</httpcore.version>
+		<httpmime.version>4.5.12</httpmime.version>
+		<jackson.version>2.10.3</jackson.version>
 		<commons-cli.version>1.4</commons-cli.version>
-		<mariadb.version>2.4.0</mariadb.version>
-		<mysql.version>8.0.15</mysql.version>
-		<mssql.version>7.2.1.jre8</mssql.version>
+		<mariadb.version>2.5.4</mariadb.version>
+		<mysql.version>8.0.19</mysql.version>
+		<mssql.version>8.2.1.jre8</mssql.version>
 		<commonsio.version>2.6</commonsio.version>
+		<postgres.version>42.2.11</postgres.version>
+		<k8sapi.version>8.0.0</k8sapi.version>
 	</properties>
 
 	<repositories>
@@ -51,6 +53,7 @@
 
 
 
+		
 
 
 	</repositories>
@@ -59,7 +62,7 @@
 		<repository>
 			<id>nexus.tremolo.io</id>
 			<name>tremolo.io-releases</name>
-			<url>https://nexus.tremolo.io/repository/betas/</url>
+			<url>s3://tremolosecurity-maven/repository/betas</url>
 		</repository>
 
 	</distributionManagement>
@@ -152,9 +155,26 @@
             <artifactId>json-simple</artifactId>
             <version>1.1.1</version>
         </dependency>
-
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<version>${postgres.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.kubernetes</groupId>
+			<artifactId>client-java</artifactId>
+			<version>${k8sapi.version}</version>
+			
+		</dependency>
 	</dependencies>
 	<build>
+		<extensions>
+			<extension>
+				<groupId>com.gkatzioura.maven.cloud</groupId>
+				<artifactId>s3-storage-wagon</artifactId>
+				<version>2.3</version>
+			</extension>
+		</extensions> 
 		<plugins>
 		 <plugin>
         <groupId>org.apache.maven.plugins</groupId>

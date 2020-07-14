@@ -24,7 +24,9 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.security.Security;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -34,6 +36,7 @@ import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
 
 import com.tremolosecurity.kubernetes.artifacts.util.K8sUtils;
+import com.tremolosecurity.kubernetes.artifacts.util.NetUtil;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -59,7 +62,11 @@ public class Controller {
     public static String jsPath;
     public static String namespace;
 
+    static List<RunWatch> watches;
+
     public static void main(String[] args) throws Exception {
+        watches = new ArrayList<RunWatch>();
+        
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
             public void run() {
@@ -103,6 +110,9 @@ public class Controller {
             
             namespace = loadOption(cmd, "namespace", options);
             
+
+            NetUtil.initialize(configMaps);
+
             String fromEnv = System.getenv(namespace);
 
             if (fromEnv != null) {
@@ -111,14 +121,26 @@ public class Controller {
             
             String objectType = loadOption(cmd, "objectType", options);
 
-            K8sUtils k8s = new K8sUtils(tokenPath, rootCaPath, configMaps, kubernetesURL);
+
+            
 
             Security.addProvider(new BouncyCastleProvider());
             //ScriptEngine engine = initializeJS(jsPath, namespace, k8s);
 
+            
+
+
+            K8sUtils k8s = new K8sUtils(tokenPath, rootCaPath, configMaps, kubernetesURL);
             k8s.setEngine(null);
+
+
+            runWatch(apiGroup, namespace, objectType, k8s);
             while (stillWatching) {
-                runWatch(apiGroup, namespace, objectType, k8s);
+                Thread.sleep(1000);
+            }
+
+            for (RunWatch watch : watches) {
+                watch.stopThread();
             }
             // URL scriptURL = new URL(installScriptURL);
             // engine.eval(new BufferedReader(new
@@ -148,6 +170,15 @@ public class Controller {
             throws Exception, ParseException {
         String uri = "/apis/" + apiGroup + "/namespaces/" + namespace + "/" + objectType;
 
+        uri = findResourceVersion(k8s, uri);
+        //k8s.watchURI(uri,"on_watch");
+
+        RunWatch runWatch = new RunWatch(k8s,uri,"on_watch");
+        watches.add(runWatch);
+        new Thread(runWatch).start();
+    }
+
+    public static String findResourceVersion(K8sUtils k8s, String uri) throws Exception, ParseException {
         Map res = k8s.callWS(uri);
         String jsonObj = (String) res.get("data");
         
@@ -157,7 +188,7 @@ public class Controller {
 
         //uri = uri + "?watch=true&resourceVersion=" + resourceVersion + "&fieldSelector=metadata.name=" + objectName;
         uri = uri + "?watch=true&resourceVersion=" + resourceVersion;
-        k8s.watchURI(uri,"on_watch");
+        return uri;
     }
 
     static String loadOption(CommandLine cmd,String name,Options options) {
