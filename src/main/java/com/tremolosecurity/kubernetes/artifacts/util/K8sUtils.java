@@ -707,7 +707,7 @@ public class K8sUtils {
 
             if (resp.getStatusLine().getStatusCode() < 200 || resp.getStatusLine().getStatusCode() > 299) {
                 System.err.println("Problem calling '" + uri + "' - " + resp.getStatusLine().getStatusCode());
-                System.err.println(json);
+                System.err.println(jsonResponse);
             }
 
             return ret;
