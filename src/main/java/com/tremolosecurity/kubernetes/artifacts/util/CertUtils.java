@@ -16,6 +16,8 @@ package com.tremolosecurity.kubernetes.artifacts.util;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
@@ -39,8 +41,11 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -61,6 +66,7 @@ import com.tremolosecurity.kubernetes.artifacts.obj.X509Data;
 import org.apache.commons.codec.binary.Base64;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
+import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.ExtendedKeyUsage;
 import org.bouncycastle.asn1.x509.Extension;
@@ -71,9 +77,12 @@ import org.bouncycastle.asn1.x509.KeyPurposeId;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.asn1.x509.X509Extensions;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.crypto.util.PrivateKeyFactory;
 import org.bouncycastle.crypto.util.PrivateKeyInfoFactory;
 import org.bouncycastle.jce.PKCS10CertificationRequest;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openssl.PKCS8Generator;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.OperatorCreationException;
@@ -147,7 +156,41 @@ public class CertUtils {
         kpg.initialize(certData.getSize(), secRandom);
         KeyPair kp = kpg.generateKeyPair();
 
-        X509V3CertificateGenerator certGen = new X509V3CertificateGenerator();
+        X500Name dnName = new X500Name("CN=" + certData.getServerName() + ", OU=" + certData.getOu() + ", O="
+        + certData.getO() + ", L=" + certData.getL() + ", ST=" + certData.getSt() + ", C=" + certData.getC());
+
+        BigInteger certSerialNumber = BigInteger.valueOf(System.currentTimeMillis());
+
+        ContentSigner contentSigner = new JcaContentSignerBuilder(certData.getSigAlg()).build(kp.getPrivate());
+
+        Instant startDate = Instant.ofEpochMilli(certData.getNotBefore().getTime());
+        Instant endDate = Instant.ofEpochMilli(certData.getNotAfter().getTime());
+
+
+        JcaX509v3CertificateBuilder certBuilder = new JcaX509v3CertificateBuilder(
+        dnName, certSerialNumber, Date.from(startDate), Date.from(endDate), dnName,
+        kp.getPublic());
+
+        if (certData.isCaCert()) {
+            //certBuilder.addExtension(Extension.create(Extension.basicConstraints, true, new BasicConstraints(true)));
+            certBuilder.addExtension(Extension.create(Extension.keyUsage, true, new KeyUsage(KeyUsage.keyCertSign)));
+            certBuilder.addExtension(Extension.create(Extension.extendedKeyUsage, true, new ExtendedKeyUsage(KeyPurposeId.anyExtendedKeyUsage)));
+        }
+
+        GeneralName[] names = new GeneralName[certData.getSubjectAlternativeNames().size() + 1];
+        names[0] = new GeneralName(GeneralName.dNSName, certData.getServerName());
+        for (int i = 0; i < certData.getSubjectAlternativeNames().size(); i++) {
+            names[i + 1] = new GeneralName(GeneralName.dNSName, certData.getSubjectAlternativeNames().get(i));
+        }
+
+        GeneralNames subjectAltName = new GeneralNames(names);
+        certBuilder.addExtension(Extension.subjectAlternativeName,false,subjectAltName );
+
+
+        Certificate certificate = new JcaX509CertificateConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME)
+        .getCertificate(certBuilder.build(contentSigner));
+
+        /*X509V3CertificateGenerator certGen = new X509V3CertificateGenerator();
 
         certGen.setSerialNumber(BigInteger.valueOf(System.currentTimeMillis()));
         certGen.setIssuerDN(new X500Principal("CN=" + certData.getServerName() + ", OU=" + certData.getOu() + ", O="
@@ -178,9 +221,9 @@ public class CertUtils {
 
         certGen.addExtension(X509Extensions.SubjectAlternativeName, false, subjectAltName);
 
-        X509Certificate cert = certGen.generate(kp.getPrivate(), secRandom);
+        X509Certificate cert = certGen.generate(kp.getPrivate(), secRandom);*/
 
-        return new X509Data(kp, cert, certData);
+        return new X509Data(kp, (X509Certificate) certificate, certData);
 
     }
 
@@ -244,7 +287,7 @@ public class CertUtils {
     }
 
     public static X509Certificate pem2cert(String pem) throws Exception {
-        if (! pem.startsWith("-")) {
+        if (!pem.startsWith("-")) {
             pem = new String(java.util.Base64.getDecoder().decode(pem));
         }
 
@@ -347,10 +390,9 @@ public class CertUtils {
     private static Collection<? extends java.security.cert.Certificate> pem2certs(String pemCert)
             throws UnsupportedEncodingException, CertificateException {
 
-        if (! pemCert.startsWith("-")) {
+        if (!pemCert.startsWith("-")) {
             pemCert = new String(java.util.Base64.getDecoder().decode(pemCert));
         }
-
 
         ByteArrayInputStream bais = new ByteArrayInputStream(pemCert.getBytes("UTF-8"));
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
@@ -437,13 +479,11 @@ public class CertUtils {
     }
 
     public static void importKeyPairAndCertPem(KeyStore ks, String ksPass, String alias, String privateKeyPEM,
-            String pemEncodedCert) throws IOException, CertificateException, KeyStoreException, NoSuchAlgorithmException,
-            InvalidKeySpecException {
+            String pemEncodedCert) throws IOException, CertificateException, KeyStoreException,
+            NoSuchAlgorithmException, InvalidKeySpecException {
 
-        
-
-        privateKeyPEM = privateKeyPEM.replace("-----BEGIN RSA PRIVATE KEY-----", "").replace("-----END RSA PRIVATE KEY-----",
-                "");// .trim();//.replaceAll("[\n,\r]", "").trim();
+        privateKeyPEM = privateKeyPEM.replace("-----BEGIN RSA PRIVATE KEY-----", "")
+                .replace("-----END RSA PRIVATE KEY-----", "");// .trim();//.replaceAll("[\n,\r]", "").trim();
         byte[] pkBytes = org.bouncycastle.util.encoders.Base64.decode(privateKeyPEM);
         PKCS8EncodedKeySpec kspec = new PKCS8EncodedKeySpec(pkBytes);
         KeyFactory kf = KeyFactory.getInstance("RSA");
@@ -454,7 +494,6 @@ public class CertUtils {
         // PrivateKey privateKey = PrivateKeyFactory.createKey(new
         // ByteArrayInputStream(java.util.Base64.getDecoder().decode(privateKeyEncoded)));
 
-        
         Collection<? extends Certificate> certs = pem2certs(pemEncodedCert);
 
         ks.setKeyEntry(alias, unencryptedPrivateKey, ksPass.toCharArray(),
@@ -462,7 +501,7 @@ public class CertUtils {
 
     }
 
-    public static KeyStore decodeKeystore(String base64EncodedKS,String ksPassword) throws KeyStoreException {
+    public static KeyStore decodeKeystore(String base64EncodedKS, String ksPassword) throws KeyStoreException {
         ByteArrayInputStream bais = new ByteArrayInputStream(java.util.Base64.getDecoder().decode(base64EncodedKS));
         KeyStore newKS = KeyStore.getInstance("PKCS12");
         try {
@@ -474,7 +513,7 @@ public class CertUtils {
     }
 
     public static boolean keystoresEqual(KeyStore ks1, KeyStore ks2, String ksPassword) {
-        
+
         try {
             HashSet<String> checked = new HashSet<String>();
 
@@ -488,7 +527,7 @@ public class CertUtils {
                     X509Certificate cert2 = (X509Certificate) ks2.getCertificate(alias1);
                     if (cert2 == null) {
                         return false;
-                    } else if (! Arrays.equals(cert1.getSignature(),cert2.getSignature())) {
+                    } else if (!Arrays.equals(cert1.getSignature(), cert2.getSignature())) {
                         return false;
                     } else {
                         checked.add(alias1);
@@ -498,7 +537,7 @@ public class CertUtils {
                     SecretKey key2 = (SecretKey) ks2.getKey(alias1, ksPassword.toCharArray());
                     if (key2 == null) {
                         return false;
-                    } else if (! Arrays.equals(key1.getEncoded(), key2.getEncoded())) {
+                    } else if (!Arrays.equals(key1.getEncoded(), key2.getEncoded())) {
                         return false;
                     } else {
                         checked.add(alias1);
@@ -508,23 +547,22 @@ public class CertUtils {
 
             Enumeration<String> ks2Aliases = ks2.aliases();
             while (ks2Aliases.hasMoreElements()) {
-                if (! checked.contains(ks2Aliases.nextElement())) {
-                    //doesn't matter the content, its failed
+                if (!checked.contains(ks2Aliases.nextElement())) {
+                    // doesn't matter the content, its failed
                     return false;
                 }
             }
 
-
             return true;
-        } catch (Exception e ) {
+        } catch (Exception e) {
             return false;
         }
 
     }
 
-    public static Map<String,String> exportCerts(KeyStore ks,String ksPwd) throws Exception {
-        Map<String,String> certs = new HashMap<String,String>();
-        
+    public static Map<String, String> exportCerts(KeyStore ks, String ksPwd) throws Exception {
+        Map<String, String> certs = new HashMap<String, String>();
+
         Enumeration<String> aliases = ks.aliases();
 
         while (aliases.hasMoreElements()) {
@@ -540,10 +578,28 @@ public class CertUtils {
         return certs;
     }
 
-    public static boolean isCertExpiring(X509Certificate cert,int daysOut) {
+    public static boolean isCertExpiring(X509Certificate cert, int daysOut) {
         DateTime expiresOn = new DateTime(cert.getNotAfter());
         DateTime checkExpires = new DateTime().plusDays(daysOut);
 
         return checkExpires.isAfter(expiresOn);
+    }
+
+    public static void mergeCaCerts(KeyStore ks) throws KeyStoreException, NoSuchAlgorithmException,
+            CertificateException, FileNotFoundException, IOException {
+        KeyStore cacerts = KeyStore.getInstance(KeyStore.getDefaultType());
+        String cacertsPath = System.getProperty("javax.net.ssl.trustStore");
+        if (cacertsPath == null) {
+            cacertsPath = System.getProperty("java.home") + "/lib/security/cacerts";
+        }
+        
+        cacerts.load(new FileInputStream(cacertsPath), null);
+        
+        Enumeration<String> enumer = cacerts.aliases();
+        while (enumer.hasMoreElements()) {
+            String alias = enumer.nextElement();
+            java.security.cert.Certificate cert = cacerts.getCertificate(alias);
+            ks.setCertificateEntry(alias, cert);
+        }
     }
 }

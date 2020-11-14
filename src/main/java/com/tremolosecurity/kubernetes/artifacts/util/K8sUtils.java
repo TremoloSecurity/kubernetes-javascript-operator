@@ -118,6 +118,9 @@ public class K8sUtils {
 
     static HashSet<String> processedVersions = new HashSet<String>();
 
+    boolean fromKc;
+    String pathToToken;
+
     /**
      * Initialization
      * 
@@ -129,7 +132,9 @@ public class K8sUtils {
      */
     public K8sUtils(String pathToToken, String pathToCA, String pathToMoreCerts, String apiServerURL) throws Exception {
         // get the token for talking to k8s
-        this.token = new String(Files.readAllBytes(Paths.get(pathToToken)), StandardCharsets.UTF_8);
+        this.pathToToken = pathToToken;
+        this.token = null;
+        this.fromKc = false;
 
         this.pathToCaCert = pathToCA;
 
@@ -142,7 +147,7 @@ public class K8sUtils {
         this.ks.load(null, this.ksPassword.toCharArray());
 
         if (System.getenv().get("KUBECONFIG") != null) {
-            
+            this.fromKc = true;
             String pathToKubeConfig = System.getenv("KUBECONFIG");
             System.out.println("******* OVERRIDING WITH KUBECONFIG FROM '" + pathToKubeConfig + "' ******************");
             
@@ -181,7 +186,7 @@ public class K8sUtils {
             for (File certFile : moreCerts.listFiles()) {
                 System.out.println("Processing - '" + certFile.getAbsolutePath() + "'");
                 if (certFile.isDirectory() || !certFile.getAbsolutePath().toLowerCase().endsWith(".pem")) {
-                    System.out.println("not a pem, sipping");
+                    System.out.println("not a pem, skipping");
                     continue;
                 }
                 String certPem = new String(Files.readAllBytes(Paths.get(certFile.getAbsolutePath())),
@@ -305,13 +310,14 @@ public class K8sUtils {
 
         System.out.println("Is OpenShift : " + localK8s.isOpenShift());
 
-        b.append(this.url).append(uri);
+        b.append(this.getK8sUrl()).append(uri);
         HttpGet get = new HttpGet(b.toString());
-        
-        if (this.token != null) {
+        String ltoken = this.getAuthorizationToken();
+        if (ltoken != null) {
+
             b.setLength(0);
-            b.append("Bearer ").append(token);
-            get.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+            b.append("Bearer ").append(ltoken);
+            get.addHeader(new BasicHeader("Authorization", "Bearer " + ltoken));
         }
 
         HttpCon con = this.createClient();
@@ -339,6 +345,7 @@ public class K8sUtils {
                 String resourceVersion = (String) metadata.get("resourceVersion");
 
                 if (resourceVersion == null) {
+                    System.out.println("unexpected json - " + line);
                     throw new Exception("No resourceVersion, restartinig watch");
                 }
 
@@ -473,12 +480,13 @@ public class K8sUtils {
 
         StringBuffer b = new StringBuffer();
 
-        b.append(this.url).append(uri);
+        b.append(this.getK8sUrl()).append(uri);
         HttpGet get = new HttpGet(b.toString());
-        if (this.token != null) {
+        String ltoken = this.getAuthorizationToken();
+        if (ltoken != null) {
             b.setLength(0);
-            b.append("Bearer ").append(token);
-            get.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+            b.append("Bearer ").append(ltoken);
+            get.addHeader(new BasicHeader("Authorization", "Bearer " + ltoken));
         }
 
         HttpCon con = this.createClient();
@@ -557,13 +565,13 @@ public class K8sUtils {
 
         StringBuffer b = new StringBuffer();
 
-        b.append(this.url).append(uri);
+        b.append(this.getK8sUrl()).append(uri);
         HttpDelete delete = new HttpDelete(b.toString());
-
-        if (this.token != null) {
+        String ltoken = this.getAuthorizationToken();
+        if (ltoken != null) {
             b.setLength(0);
-            b.append("Bearer ").append(token);
-            delete.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+            b.append("Bearer ").append(ltoken);
+            delete.addHeader(new BasicHeader("Authorization", "Bearer " + ltoken));
         }
 
         HttpCon con = this.createClient();
@@ -600,12 +608,13 @@ public class K8sUtils {
     public Map postWS(String uri, String json) throws Exception {
         StringBuffer b = new StringBuffer();
 
-        b.append(this.url).append(uri);
+        b.append(this.getK8sUrl()).append(uri);
         HttpPost post = new HttpPost(b.toString());
-        if (this.token != null) {
+        String ltoken = this.getAuthorizationToken();
+        if (ltoken != null) {
             b.setLength(0);
-            b.append("Bearer ").append(token);
-            post.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+            b.append("Bearer ").append(ltoken);
+            post.addHeader(new BasicHeader("Authorization", "Bearer " + ltoken));
         }
 
         StringEntity str = new StringEntity(json, ContentType.APPLICATION_JSON);
@@ -644,12 +653,13 @@ public class K8sUtils {
     public Map patchWS(String uri, String json) throws Exception {
         StringBuffer b = new StringBuffer();
 
-        b.append(this.url).append(uri);
+        b.append(this.getK8sUrl()).append(uri);
         HttpPatch patch = new HttpPatch(b.toString());
-        if (this.token != null) {
+        String ltoken = this.getAuthorizationToken();
+        if (ltoken != null) {
             b.setLength(0);
-            b.append("Bearer ").append(token);
-            patch.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+            b.append("Bearer ").append(ltoken);
+            patch.addHeader(new BasicHeader("Authorization", "Bearer " + ltoken));
         }
         patch.setEntity(EntityBuilder.create().setContentType(ContentType.create("application/merge-patch+json")).setText(json).build());
 
@@ -687,12 +697,13 @@ public class K8sUtils {
     public Map putWS(String uri, String json) throws Exception {
         StringBuffer b = new StringBuffer();
 
-        b.append(this.url).append(uri);
+        b.append(this.getK8sUrl()).append(uri);
         HttpPut post = new HttpPut(b.toString());
-        if (this.token != null) {
+        String ltoken = this.getAuthorizationToken();
+        if (ltoken != null) {
             b.setLength(0);
-            b.append("Bearer ").append(token);
-            post.addHeader(new BasicHeader("Authorization", "Bearer " + token));
+            b.append("Bearer ").append(ltoken);
+            post.addHeader(new BasicHeader("Authorization", "Bearer " + ltoken));
         }
         StringEntity str = new StringEntity(json, ContentType.APPLICATION_JSON);
         post.setEntity(str);
@@ -804,7 +815,8 @@ public class K8sUtils {
      * @throws InterruptedException
      */
     public void kubectlCreate(String data) throws IOException, InterruptedException {
-        Process p = Runtime.getRuntime().exec(new String[] { "kubectl", "--token=" + this.token, "--server=" + this.url,
+        String ltoken = this.getAuthorizationToken();
+        Process p = Runtime.getRuntime().exec(new String[] { "kubectl", "--token=" + ltoken, "--server=" + this.getK8sUrl(),
                 "--certificate-authority=" + this.pathToCaCert, "create", "-f", "-" });
 
         new Thread() {
@@ -896,5 +908,23 @@ public class K8sUtils {
 
     public Map<String,String> getExtraCerts() {
         return this.extraCerts;
+    }
+
+    public String getK8sUrl() {
+        if (this.url.equalsIgnoreCase("https://kubernetes.default.svc.cluster.local")) {
+            //we want to use the default URL.  Instead of using it, we'll build it from
+            //the environment variables
+            return new StringBuilder().append("https://").append(System.getenv("KUBERNETES_SERVICE_HOST")).append(":").append(System.getenv("KUBERNETES_SERVICE_PORT")).toString();
+        } else {
+            return this.url;
+        }
+    }
+
+    public String getAuthorizationToken() throws IOException {
+        if (this.fromKc) {
+            return this.token;
+        } else {
+            return new String(Files.readAllBytes(Paths.get(pathToToken)), StandardCharsets.UTF_8);
+        }
     }
 }

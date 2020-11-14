@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.StringTokenizer;
 import java.util.stream.Collectors;
 
 import javax.script.ScriptContext;
@@ -105,6 +106,14 @@ public class Controller {
             jsPath = loadOption(cmd, "jsPath", options);
 
             String apiGroup = loadOption(cmd, "apiGroup", options);
+
+            StringTokenizer toker = new StringTokenizer(apiGroup,",",false);
+            List<String> apiGroups = new ArrayList<String>();
+
+            while (toker.hasMoreTokens()) {
+                apiGroups.add(toker.nextToken());
+            }
+            
             
             
             
@@ -134,7 +143,7 @@ public class Controller {
             k8s.setEngine(null);
 
 
-            runWatch(apiGroup, namespace, objectType, k8s);
+            runWatch(apiGroups, namespace, objectType, k8s);
             while (stillWatching) {
                 Thread.sleep(1000);
             }
@@ -166,16 +175,26 @@ public class Controller {
         return engine;
     }
 
-    private static void runWatch(String apiGroup, String namespace, String objectType, K8sUtils k8s)
+    private static void runWatch(List<String> apiGroups, String namespace, String objectType, K8sUtils k8s)
             throws Exception, ParseException {
-        String uri = "/apis/" + apiGroup + "/namespaces/" + namespace + "/" + objectType;
-
-        uri = findResourceVersion(k8s, uri);
+        
+        for (String apiGroup : apiGroups) {
+            String uri = "/apis/" + apiGroup + "/namespaces/" + namespace + "/" + objectType;
+            RunWatch runWatch = new RunWatch(k8s,uri,"on_watch");
+            if (runWatch.isRightVersion()) {
+                System.out.println("Using version '" + apiGroup + "'");
+                watches.add(runWatch);
+                new Thread(runWatch).start();
+                break;
+            } else {
+                System.out.println("Unknown version '" + apiGroup + "'");
+            }
+        } 
+        //uri = findResourceVersion(k8s, uri);
         //k8s.watchURI(uri,"on_watch");
 
-        RunWatch runWatch = new RunWatch(k8s,uri,"on_watch");
-        watches.add(runWatch);
-        new Thread(runWatch).start();
+        
+        
     }
 
     public static String findResourceVersion(K8sUtils k8s, String uri) throws Exception, ParseException {
@@ -187,7 +206,7 @@ public class Controller {
         System.out.println(resourceVersion);
 
         //uri = uri + "?watch=true&resourceVersion=" + resourceVersion + "&fieldSelector=metadata.name=" + objectName;
-        uri = uri + "?watch=true&resourceVersion=" + resourceVersion;
+        uri = uri + "?watch=true&resourceVersion=" + resourceVersion + "&timeoutSeconds=30";
         return uri;
     }
 

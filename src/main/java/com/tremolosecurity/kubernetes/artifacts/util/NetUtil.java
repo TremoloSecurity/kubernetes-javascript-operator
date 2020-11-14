@@ -146,11 +146,16 @@ public class NetUtil {
 
         BasicHttpClientConnectionManager bhcm = new BasicHttpClientConnectionManager(httpClientRegistry);
 
+        int numSecconds = 30;
+
         RequestConfig rc = RequestConfig.custom().setCookieSpec(CookieSpecs.STANDARD).setRedirectsEnabled(false)
-                .build();
+                .setConnectTimeout(numSecconds * 1000)
+                .setConnectionRequestTimeout(numSecconds * 1000)
+                .setSocketTimeout(numSecconds * 1000).build();
 
         CloseableHttpClient http = HttpClients.custom().setConnectionManager(bhcm).setDefaultHeaders(defheaders)
                 .setDefaultRequestConfig(rc).build();
+
 
         HttpCon con = new HttpCon();
         con.setBcm(bhcm);
@@ -173,10 +178,13 @@ public class NetUtil {
         
         URL urlObj = new URL(url);
         URLConnection conn = urlObj.openConnection();
+        String ret = null;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8)))
         {
-            return reader.lines().collect(Collectors.joining("\n"));
+            ret = reader.lines().collect(Collectors.joining("\n"));
         }
+
+        return ret;
     
     }
 
@@ -199,7 +207,12 @@ public class NetUtil {
             return reader.lines().collect(Collectors.joining("\n"));
         }
         } finally {
-            con.getHttp().close();
+            try {
+                con.getHttp().close();
+            } catch (Exception e) {
+                //do nothig
+            }
+            con.getBcm().shutdown();
             con.getBcm().close();
         }
 
