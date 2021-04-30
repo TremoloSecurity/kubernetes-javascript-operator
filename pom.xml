@@ -19,7 +19,7 @@
 		<commons-collections.version>3.2.2</commons-collections.version>
 		<commons-cli.version>1.4</commons-cli.version>
 		<xerces.version>2.12.0</xerces.version>
-		<bcprov-jdk15on.version>1.66</bcprov-jdk15on.version>
+		<bcprov-jdk15on.version>1.67</bcprov-jdk15on.version>
 		<bcprov-ext-jdk15on.version>1.66</bcprov-ext-jdk15on.version>
 		<log4j.version>2.11.0</log4j.version>
 		<bcpkix-jdk15on.version>1.64</bcpkix-jdk15on.version>
