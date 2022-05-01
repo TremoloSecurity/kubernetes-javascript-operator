@@ -10,7 +10,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.tremolosecurity.kubernetes</groupId>
 	<artifactId>javascript-operator</artifactId>
-	<version>1.1.0</version>
+	<version>1.2.0</version>
 	<name>javascript-operator</name>
 	<packaging>jar</packaging>
 
@@ -19,24 +19,24 @@
 		<commons-collections.version>3.2.2</commons-collections.version>
 		<commons-cli.version>1.4</commons-cli.version>
 		<xerces.version>2.12.0</xerces.version>
-		<bcprov-jdk15on.version>1.66</bcprov-jdk15on.version>
-		<bcprov-ext-jdk15on.version>1.66</bcprov-ext-jdk15on.version>
+		<bcprov-jdk15on.version>1.69</bcprov-jdk15on.version>
+		<bcprov-ext-jdk15on.version>1.69</bcprov-ext-jdk15on.version>
 		<log4j.version>2.11.0</log4j.version>
 		<bcpkix-jdk15on.version>1.64</bcpkix-jdk15on.version>
 		<xmlsec.version>2.0.5</xmlsec.version>
-		<joda-time.version>2.10.6</joda-time.version>
+		<joda-time.version>2.10.13</joda-time.version>
 		<commons-codec.version>1.15</commons-codec.version>
-		<httpclient.version>4.5.12</httpclient.version>
-		<httpcore.version>4.4.13</httpcore.version>
-		<httpmime.version>4.5.12</httpmime.version>
-		<jackson.version>2.11.2</jackson.version>
-		<commons-cli.version>1.4</commons-cli.version>
-		<mariadb.version>2.7.0</mariadb.version>
-		<mysql.version>8.0.21</mysql.version>
-		<mssql.version>8.4.1.jre8</mssql.version>
-		<commonsio.version>2.8.0</commonsio.version>
-		<postgres.version>42.2.16.jre7</postgres.version>
-		<k8sapi.version>10.0.0</k8sapi.version>
+		<httpclient.version>4.5.13</httpclient.version>
+		<httpcore.version>4.4.14</httpcore.version>
+		<httpmime.version>4.5.13</httpmime.version>
+		<jackson.version>2.13.0</jackson.version>
+		<commons-cli.version>1.5.0</commons-cli.version>
+		<mariadb.version>2.7.4</mariadb.version>
+		<mysql.version>8.0.27</mysql.version>
+		<mssql.version>9.5.0.jre8</mssql.version>
+		<commonsio.version>2.11.0</commonsio.version>
+		<postgres.version>42.3.1</postgres.version>
+		<k8sapi.version>14.0.0</k8sapi.version>
 	</properties>
 
 	<repositories>

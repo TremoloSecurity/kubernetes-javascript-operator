@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.Map;
 
 import javax.script.Invocable;
+import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 
 import com.tremolosecurity.kubernetes.artifacts.obj.HttpCon;
@@ -139,7 +140,7 @@ public class K8sWatcher {
 
                                     // process the object
                                     try {
-                                        processEvent(event);
+                                        processEvent(event,uri);
                                     } catch (Exception e) {
                                         e.printStackTrace();
                                     }
@@ -149,7 +150,7 @@ public class K8sWatcher {
                             } else {
                                 // process the object
                                 try {
-                                    processEvent(event);
+                                    processEvent(event,uri);
                                 } catch (Exception e) {
                                     e.printStackTrace();
                                 }
@@ -214,7 +215,7 @@ public class K8sWatcher {
 
                     // process the object
                     try {
-                        processEvent(change);
+                        processEvent(change,uri);
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
@@ -229,7 +230,7 @@ public class K8sWatcher {
 
                 // process the object
                 try {
-                    processEvent(add);
+                    processEvent(add,uri);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -255,7 +256,7 @@ public class K8sWatcher {
         String digestBase64 = generateCheckSum(chkObj);
 
         String existingDigest = (String) ((JSONObject) cr.get("status")).get("digest");
-        return !existingDigest.equals(digestBase64);
+        return existingDigest == null || !existingDigest.equals(digestBase64);
     }
 
     private static String generateCheckSum(JSONObject chkObj)
@@ -301,10 +302,22 @@ public class K8sWatcher {
         }
     }
 
-    private String processEvent(JSONObject event) throws Exception {
+    private String processEvent(JSONObject event,String uri) throws Exception {
         K8sUtils localK8s = new K8sUtils(Controller.tokenPath, Controller.rootCaPath, Controller.configMaps,
                 Controller.kubernetesURL);
+
+        String selfUri = uri;
+        if (selfUri.contains("?")) { 
+            selfUri = selfUri.substring(0,selfUri.indexOf('?'));
+        }
+
+
+        JSONObject obj = (JSONObject) event.get("object");
+
+        selfUri += "/" + ((JSONObject)obj.get("metadata")).get("name");
+        
         ScriptEngine localEngine = Controller.initializeJS(Controller.jsPath, Controller.namespace, localK8s);
+        localEngine.getBindings(ScriptContext.ENGINE_SCOPE).put("selfLink", selfUri);
         localK8s.setEngine(localEngine);
 
         Invocable invocable = (Invocable) localEngine;
@@ -314,7 +327,9 @@ public class K8sWatcher {
         String result = null;
 
         try {
+            System.out.println("Invoking javascript");
             result = (String) invocable.invokeFunction(functionName, event.toString());
+            System.out.println("Done invoking javascript");
         } catch (Throwable t) {
             System.err.println("Error on watch - " + event.toString());
             t.printStackTrace(System.err);
@@ -329,18 +344,31 @@ public class K8sWatcher {
             }
         }
 
+
+        System.out.println("Checking if need to create a status for : '" + event.get("type") + "'");
         if (event.get("type").equals("MODIFIED") || event.get("type").equals("ADDED")) {
+            System.out.println("Generating status");
             JSONObject cr = generateCleanCR((JSONObject) event.get("object"));
 
             String digestBase64 = generateCheckSum(cr);
             ((JSONObject) cr.get("metadata")).put("resourceVersion",
                     (String) ((JSONObject) ((JSONObject) event.get("object")).get("metadata")).get("resourceVersion"));
             JSONObject patch = generateJsonStatus(result, digestBase64, localK8s.getAdditionalStatuses());
-            cr.put("status", patch);
-            String selfLink = (String) ((JSONObject) ((JSONObject) event.get("object")).get("metadata"))
-                    .get("selfLink");
+            System.out.println("Creating status patch : " + patch);
 
-            this.k8s.putWS(selfLink + "/status", cr.toJSONString());
+            
+
+            selfUri += "/status";
+            System.out.println("Patching to '" + selfUri + "'");
+
+            JSONObject status = new JSONObject();
+            status.put("status", patch);
+            //String selfLink = (String) ((JSONObject) ((JSONObject) event.get("object")).get("metadata"))
+            //        .get("selfLink");
+
+
+            System.out.println("Patch : '" + status.toString() + "'");
+            System.out.println(this.k8s.patchWS(selfUri, status.toString()));
 
         }
 

@@ -389,7 +389,9 @@ public class K8sUtils {
                 String result = null;
                 
                 try {
+                    System.out.println("Starting javascript");
                     result = (String) invocable.invokeFunction(functionName, line);
+                    System.out.println("javascript completed");
                 } catch (Throwable t) {
                     System.err.println("Error on watch - " + uri);
                     t.printStackTrace(System.err);
@@ -404,12 +406,23 @@ public class K8sUtils {
                     }
                 }
 
+                System.out.println("Creating status for '" + json.get("type") + "'");
                 if (json.get("type").equals("MODIFIED") || json.get("type").equals("ADDED")) {
+                    System.out.println("Creating status");
                     JSONObject patch = this.generateJsonStatus(result, digestBase64,localK8s.getAdditionalStatuses());
                     cr.put("status",patch);
-                    String selfLink = (String)  ((JSONObject) ((JSONObject) json.get("object")).get("metadata")).get("selfLink");
 
-                    this.putWS(selfLink + "/status", cr.toJSONString());
+                    String selfUri = uri;
+                    if (selfUri.contains("?")) { 
+                        selfUri = selfUri.substring(0,selfUri.indexOf('?'));
+                    }
+
+                    System.out.println("Patching : '" + selfUri + "'");
+                    System.out.println("New status : " + cr.toJSONString());
+
+                    //String selfLink = (String)  ((JSONObject) ((JSONObject) json.get("object")).get("metadata")).get("selfLink");
+
+                    this.putWS(selfUri + "/status", cr.toJSONString());
                 
 
                 }

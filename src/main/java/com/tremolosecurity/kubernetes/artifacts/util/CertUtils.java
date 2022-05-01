@@ -585,7 +585,7 @@ public class CertUtils {
         return checkExpires.isAfter(expiresOn);
     }
 
-    public static void mergeCaCerts(KeyStore ks) throws KeyStoreException, NoSuchAlgorithmException,
+    public static KeyStore mergeCaCerts(KeyStore ks) throws KeyStoreException, NoSuchAlgorithmException,
             CertificateException, FileNotFoundException, IOException {
         KeyStore cacerts = KeyStore.getInstance(KeyStore.getDefaultType());
         String cacertsPath = System.getProperty("javax.net.ssl.trustStore");
@@ -599,7 +599,20 @@ public class CertUtils {
         while (enumer.hasMoreElements()) {
             String alias = enumer.nextElement();
             java.security.cert.Certificate cert = cacerts.getCertificate(alias);
-            ks.setCertificateEntry(alias, cert);
+            if (cert != null) {
+                ks.setCertificateEntry(alias, cert);
+            }
         }
+
+        enumer = ks.aliases();
+        while (enumer.hasMoreElements()) {
+            String alias = enumer.nextElement();
+            java.security.cert.Certificate cert = ks.getCertificate(alias);
+            if (cert != null) {
+                cacerts.setCertificateEntry(alias, cert);
+            }
+        }
+
+        return cacerts;
     }
 }
