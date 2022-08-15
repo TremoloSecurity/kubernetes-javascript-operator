@@ -175,6 +175,9 @@ public class CertUtils {
             //certBuilder.addExtension(Extension.create(Extension.basicConstraints, true, new BasicConstraints(true)));
             certBuilder.addExtension(Extension.create(Extension.keyUsage, true, new KeyUsage(KeyUsage.keyCertSign)));
             certBuilder.addExtension(Extension.create(Extension.extendedKeyUsage, true, new ExtendedKeyUsage(KeyPurposeId.anyExtendedKeyUsage)));
+        } else {
+            certBuilder.addExtension(Extension.create(Extension.extendedKeyUsage, true, new ExtendedKeyUsage(KeyPurposeId.id_kp_serverAuth)));
+            certBuilder.addExtension(Extension.create(Extension.keyUsage, true, new KeyUsage(KeyUsage.keyEncipherment | KeyUsage.digitalSignature)));
         }
 
         GeneralName[] names = new GeneralName[certData.getSubjectAlternativeNames().size() + 1];

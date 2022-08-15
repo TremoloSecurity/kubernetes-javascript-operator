@@ -10,7 +10,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.tremolosecurity.kubernetes</groupId>
 	<artifactId>javascript-operator</artifactId>
-	<version>1.2.0</version>
+	<version>1.3.0</version>
 	<name>javascript-operator</name>
 	<packaging>jar</packaging>
 
@@ -19,23 +19,24 @@
 		<commons-collections.version>3.2.2</commons-collections.version>
 		<commons-cli.version>1.4</commons-cli.version>
 		<xerces.version>2.12.0</xerces.version>
-		<bcprov-jdk15on.version>1.69</bcprov-jdk15on.version>
-		<bcprov-ext-jdk15on.version>1.69</bcprov-ext-jdk15on.version>
+		<bcprov-jdk15on.version>1.70</bcprov-jdk15on.version>
+		<bcprov-ext-jdk15on.version>1.70</bcprov-ext-jdk15on.version>
 		<log4j.version>2.11.0</log4j.version>
 		<bcpkix-jdk15on.version>1.64</bcpkix-jdk15on.version>
 		<xmlsec.version>2.0.5</xmlsec.version>
-		<joda-time.version>2.10.13</joda-time.version>
+		<joda-time.version>2.10.14</joda-time.version>
 		<commons-codec.version>1.15</commons-codec.version>
 		<httpclient.version>4.5.13</httpclient.version>
-		<httpcore.version>4.4.14</httpcore.version>
+		<httpcore.version>4.4.15</httpcore.version>
 		<httpmime.version>4.5.13</httpmime.version>
-		<jackson.version>2.13.0</jackson.version>
+		<jackson.version>2.13.2.2</jackson.version>
+		<jackson-core.version>2.13.2</jackson-core.version>
 		<commons-cli.version>1.5.0</commons-cli.version>
-		<mariadb.version>2.7.4</mariadb.version>
-		<mysql.version>8.0.27</mysql.version>
-		<mssql.version>9.5.0.jre8</mssql.version>
+		<mariadb.version>3.0.4</mariadb.version>
+		<mysql.version>8.0.29</mysql.version>
+		<mssql.version>10.2.0.jre8</mssql.version>
 		<commonsio.version>2.11.0</commonsio.version>
-		<postgres.version>42.3.1</postgres.version>
+		<postgres.version>42.3.4</postgres.version>
 		<k8sapi.version>14.0.0</k8sapi.version>
 	</properties>
 
@@ -70,7 +71,7 @@
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
-			<version>4.12</version>
+			<version>4.13.2</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -121,7 +122,7 @@
 		<dependency>
 			<groupId>com.fasterxml.jackson.dataformat</groupId>
   			<artifactId>jackson-dataformat-yaml</artifactId>
-			<version>${jackson.version}</version>
+			<version>${jackson-core.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>commons-cli</groupId>
