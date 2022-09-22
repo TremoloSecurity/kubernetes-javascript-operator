@@ -36,7 +36,7 @@
 		<mysql.version>8.0.29</mysql.version>
 		<mssql.version>10.2.0.jre8</mssql.version>
 		<commonsio.version>2.11.0</commonsio.version>
-		<postgres.version>42.3.4</postgres.version>
+		<postgres.version>42.3.7</postgres.version>
 		<k8sapi.version>14.0.0</k8sapi.version>
 	</properties>
 
