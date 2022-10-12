@@ -47,7 +47,16 @@ public class DbUtils {
     public static void runSQL(List<String> sqls, String driver, String url, String userName, String password)
             throws ClassNotFoundException, SQLException {
         Class.forName(driver);
-        Connection con = DriverManager.getConnection(url, userName, password);
+        Connection con = null;
+        
+        if (url.toLowerCase().contains("authentication=activedirectoryintegrated") || url.toLowerCase().contains("authentication=activedirectorymsi") || url.toLowerCase().contains("integratedsecurity=true")) {
+            // we're using AD, no username or password
+            con = DriverManager.getConnection(url);
+        } else {
+            con = DriverManager.getConnection(url, userName, password);
+        }
+        
+        
         Statement stmt = con.createStatement();
         for (String sql : sqls) {
             System.out.println("sql : '" + sql + "'");

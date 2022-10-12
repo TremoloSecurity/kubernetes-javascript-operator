@@ -34,6 +34,9 @@ public class K8sWatcher {
     String functionName;
     HashSet<String> expired;
 
+    String lastResourceId;
+    long lastResourceIdNum;
+
     public K8sWatcher(K8sUtils k8s, String functionName) {
         this.k8s = k8s;
         this.processedVersions = new HashSet<String>();
@@ -68,7 +71,7 @@ public class K8sWatcher {
 
             while (keepRunning) {
                 StringBuilder sb = new StringBuilder().append(k8s.getK8sUrl()).append(uri)
-                        .append("?watch=true&timeoutSeconds=30");
+                        .append("?watch=true&timeoutSeconds=30&allowWatchBookmarks=true");
                 if (this.lastProcessedResource != null) {
                     sb.append("&resourceVersion=").append(this.lastProcessedResource);
                 }
@@ -100,6 +103,30 @@ public class K8sWatcher {
                 while ((line = in.readLine()) != null) {
                     JSONObject event = (JSONObject) parser.parse(line);
                     JSONObject object = (JSONObject) event.get("object");
+
+                    if (event.get("kind") != null && event.get("kind").equals("BOOKMARK")) {
+                        this.lastResourceId = getResourceVersion(object );
+                        this.processedVersions.add(this.lastResourceId);
+                        continue;
+                    } else if (event.get("kind") != null && event.get("kind").equals("ERROR")) {
+                        // there was an error
+                        long errorCode = (Long) event.get("code");
+                        
+                        if (errorCode == 504 || errorCode == 410) {
+                            String msg = (String) object.get("message");
+                            int indexstart = msg.indexOf('(');
+                            if (indexstart == -1) {
+                                //i'm not really sure how to handle this
+                                throw new Exception(String.format("Could not process watch %s",msg));
+                            } else {
+                                int indexend = msg.indexOf(')');
+                                String newResourceId = msg.substring(indexstart+1,indexend);
+                                this.lastResourceId = newResourceId;
+                                this.processedVersions.add(newResourceId);
+                                continue;
+                            }
+                        }
+                    }
                     
                     if (object.get("kind") != null && object.get("kind").equals("Status")) {
                         if (object.get("status").equals("Failure")) {

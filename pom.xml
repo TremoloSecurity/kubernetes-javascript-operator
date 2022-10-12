@@ -10,7 +10,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.tremolosecurity.kubernetes</groupId>
 	<artifactId>javascript-operator</artifactId>
-	<version>1.3.0</version>
+	<version>1.6.0</version>
 	<name>javascript-operator</name>
 	<packaging>jar</packaging>
 
@@ -24,19 +24,19 @@
 		<log4j.version>2.11.0</log4j.version>
 		<bcpkix-jdk15on.version>1.64</bcpkix-jdk15on.version>
 		<xmlsec.version>2.0.5</xmlsec.version>
-		<joda-time.version>2.10.14</joda-time.version>
+		<joda-time.version>2.11.2</joda-time.version>
 		<commons-codec.version>1.15</commons-codec.version>
 		<httpclient.version>4.5.13</httpclient.version>
 		<httpcore.version>4.4.15</httpcore.version>
 		<httpmime.version>4.5.13</httpmime.version>
-		<jackson.version>2.13.2.2</jackson.version>
-		<jackson-core.version>2.13.2</jackson-core.version>
+		<jackson.version>2.13.4</jackson.version>
+		<jackson-core.version>2.13.4</jackson-core.version>
 		<commons-cli.version>1.5.0</commons-cli.version>
-		<mariadb.version>3.0.4</mariadb.version>
-		<mysql.version>8.0.29</mysql.version>
-		<mssql.version>10.2.0.jre8</mssql.version>
+		<mariadb.version>3.0.8</mariadb.version>
+		<mysql.version>8.0.30</mysql.version>
+		<mssql.version>11.2.1.jre11</mssql.version>
 		<commonsio.version>2.11.0</commonsio.version>
-		<postgres.version>42.3.4</postgres.version>
+		<postgres.version>42.5.0</postgres.version>
 		<k8sapi.version>14.0.0</k8sapi.version>
 	</properties>
 
@@ -233,8 +233,8 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
+                    <source>11</source>
+                    <target>11</target>
                 </configuration>
             </plugin>
 		</plugins>
