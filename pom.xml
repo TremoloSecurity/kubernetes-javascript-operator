@@ -29,7 +29,7 @@
 		<httpclient.version>4.5.13</httpclient.version>
 		<httpcore.version>4.4.15</httpcore.version>
 		<httpmime.version>4.5.13</httpmime.version>
-		<jackson.version>2.13.4</jackson.version>
+		<jackson.version>2.13.4.2</jackson.version>
 		<jackson-core.version>2.13.4</jackson-core.version>
 		<commons-cli.version>1.5.0</commons-cli.version>
 		<mariadb.version>3.0.8</mariadb.version>
